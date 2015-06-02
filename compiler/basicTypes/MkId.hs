@@ -596,11 +596,17 @@ dataConArgRep
 dataConArgRep _ _ arg_ty HsNoBang
   = (HsNoBang, [(arg_ty, NotMarkedStrict)], (unitUnboxer, unitBoxer))
 
-dataConArgRep _ _ arg_ty (HsSrcBang _ _ False)  -- No '!'
+dataConArgRep dflags fam_envs arg_ty (HsSrcBang ann unpk Nothing) -- no strictness mark
+  | xopt Opt_StrictData dflags -- StrictData => strict field
+  = dataConArgRep dflags fam_envs arg_ty (HsSrcBang ann unpk (Just True))
+  | otherwise -- no StrictData => lazy field
+  = (HsNoBang, [(arg_ty, NotMarkedStrict)], (unitUnboxer, unitBoxer))
+
+dataConArgRep _ _ arg_ty (HsSrcBang _ _ (Just False)) -- explicitly lazy, '~'
   = (HsNoBang, [(arg_ty, NotMarkedStrict)], (unitUnboxer, unitBoxer))
 
 dataConArgRep dflags fam_envs arg_ty
-    (HsSrcBang _ unpk_prag True)  -- {-# UNPACK #-} !
+    (HsSrcBang _ unpk_prag (Just True))  -- {-# UNPACK #-} !
   | not (gopt Opt_OmitInterfacePragmas dflags) -- Don't unpack if -fomit-iface-pragmas
           -- Don't unpack if we aren't optimising; rather arbitrarily,
           -- we use -fomit-iface-pragmas as the indication
@@ -728,11 +734,13 @@ isUnpackableType fam_envs ty
          -- NB: dataConSrcBangs gives the *user* request;
          -- We'd get a black hole if we used dataConImplBangs
 
-    attempt_unpack (HsUnpack {})                  = True
-    attempt_unpack (HsSrcBang _ (Just unpk) bang) = bang && unpk
-    attempt_unpack (HsSrcBang _  Nothing bang)     = bang  -- Be conservative
-    attempt_unpack HsStrict                       = False
-    attempt_unpack HsNoBang                       = False
+    attempt_unpack (HsUnpack {})                         = True
+    attempt_unpack (HsSrcBang _ (Just unpk) (Just mark)) = mark && unpk
+    attempt_unpack (HsSrcBang _  Nothing (Just mark))    = mark  -- Be conservative
+    attempt_unpack (HsSrcBang _ (Just _) Nothing)        = False -- does not make sense
+    attempt_unpack (HsSrcBang _  Nothing Nothing)        = False
+    attempt_unpack HsStrict                              = False
+    attempt_unpack HsNoBang                              = False
 
 {-
 Note [Unpack one-wide fields]

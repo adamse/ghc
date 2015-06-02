@@ -1613,8 +1613,8 @@ checkValidDataCon dflags existential_ok tc con
     }
   where
     ctxt = ConArgCtxt (dataConName con)
-    check_bang (HsSrcBang _ (Just want_unpack) has_bang, rep_bang, n)
-      | want_unpack, not has_bang
+    check_bang (HsSrcBang _ (Just want_unpack) strict_mark, rep_bang, n)
+      | want_unpack, not is_strict
       = addWarnTc (bad_bang n (ptext (sLit "UNPACK pragma lacks '!'")))
       | want_unpack
       , case rep_bang of { HsUnpack {} -> False; _ -> True }
@@ -1622,6 +1622,10 @@ checkValidDataCon dflags existential_ok tc con
            -- If not optimising, se don't unpack, so don't complain!
            -- See MkId.dataConArgRep, the (HsBang True) case
       = addWarnTc (bad_bang n (ptext (sLit "Ignoring unusable UNPACK pragma")))
+      where
+        is_strict = case strict_mark of
+                      Just bang -> bang
+                      Nothing   -> xopt Opt_StrictData dflags
 
     check_bang _
       = return ()
@@ -1704,7 +1708,7 @@ checkValidClass cls
                 -- Here, MonadState has a fundep m->b, so newBoard is fine
 
         ; unless constrained_class_methods $
-          mapM_ check_constraint (tail (theta1 ++ theta2)) 
+          mapM_ check_constraint (tail (theta1 ++ theta2))
 
         ; case dm of
             GenDefMeth dm_name -> do { dm_id <- tcLookupId dm_name
@@ -2164,7 +2168,7 @@ classFunDepsErr cls
 
 badMethPred :: Id -> TcPredType -> SDoc
 badMethPred sel_id pred
-  = vcat [ hang (ptext (sLit "Constraint") <+> quotes (ppr pred) 
+  = vcat [ hang (ptext (sLit "Constraint") <+> quotes (ppr pred)
                  <+> ptext (sLit "in the type of") <+> quotes (ppr sel_id))
               2 (ptext (sLit "constrains only the class type variables"))
          , ptext (sLit "Use ConstrainedClassMethods to allow it") ]
