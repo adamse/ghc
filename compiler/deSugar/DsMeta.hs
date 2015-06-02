@@ -645,15 +645,15 @@ mkGadtCtxt data_tvs (ResTyGADT _ res_ty)
 
 
 repBangTy :: LBangType Name -> DsM (Core (TH.StrictTypeQ))
-repBangTy ty= do
+repBangTy ty = do
   MkC s <- rep2 str []
   MkC t <- repLTy ty'
   rep2 strictTypeName [s, t]
   where
     (str, ty') = case ty of
-         L _ (HsBangTy (HsSrcBang _ (Just True) True) ty) -> (unpackedName,  ty)
-         L _ (HsBangTy (HsSrcBang _ _     True) ty)       -> (isStrictName,  ty)
-         _                                                -> (notStrictName, ty)
+         L _ (HsBangTy (HsSrcBang _ (Just True) (Just True)) ty) -> (unpackedName,  ty)
+         L _ (HsBangTy (HsSrcBang _ _     (Just True)) ty)       -> (isStrictName,  ty)
+         _                                                       -> (notStrictName, ty)
 
 -------------------------------------------------------
 --                      Deriving clause
@@ -2093,5 +2093,3 @@ notHandled what doc = failWithDs msg
   where
     msg = hang (text what <+> ptext (sLit "not (yet) handled by Template Haskell"))
              2 doc
-
-
