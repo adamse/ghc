@@ -7,13 +7,15 @@ import qualified Control.Exception as E
 import System.IO.Unsafe (unsafePerformIO)
 
 data Strict a = S a
+data Strict2 b = S2 !b
 data UStrict = US {-# UNPACK #-} Int
 
-data Lazy a = L a
+data Lazy c = L ~c
 
 main :: IO ()
 main =
   do print (isBottom (S bottom))
+     print (isBottom (S2 bottom))
      print (isBottom (US bottom))
      putStrLn ""
      print (not (isBottom (L bottom)))

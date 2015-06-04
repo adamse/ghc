@@ -1637,8 +1637,9 @@ checkValidDataCon dflags existential_ok tc con
 checkNewDataCon :: DataCon -> TcM ()
 -- Further checks for the data constructor of a newtype
 checkNewDataCon con
-  = do  { checkTc (isSingleton arg_tys) (newtypeFieldErr con (length arg_tys))
-                -- One argument
+  = do  { dflags <- getDynFlags
+        ; checkTc (isSingleton arg_tys) (newtypeFieldErr con (length arg_tys))
+              -- One argument
 
         ; check_con (null eq_spec) $
           ptext (sLit "A newtype constructor must have a return type of form T a1 ... an")
@@ -1651,7 +1652,7 @@ checkNewDataCon con
           ptext (sLit "A newtype constructor cannot have existential type variables")
                 -- No existentials
 
-        ; checkTc (not (any isBanged (dataConSrcBangs con)))
+        ; checkTc (not (any (isBanged dflags) (dataConSrcBangs con)))
                   (newtypeStrictError con)
                 -- No strictness
     }

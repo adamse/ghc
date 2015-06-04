@@ -1488,7 +1488,7 @@ reifyFixity name
       conv_dir BasicTypes.InfixN = TH.InfixN
 
 reifyStrict :: DataCon.HsSrcBang -> TH.Strict
-reifyStrict HsNoBang                               = TH.NotStrict
+reifyStrict HsLazy                                 = TH.NotStrict
 reifyStrict (HsSrcBang _ _           (Just False)) = TH.NotStrict
 reifyStrict (HsSrcBang _ _           Nothing)      = TH.NotStrict
 reifyStrict (HsSrcBang _ (Just True) (Just True))  = TH.Unpacked
