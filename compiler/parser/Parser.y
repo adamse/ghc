@@ -1570,7 +1570,7 @@ sigtypes1 :: { (OrdList (LHsType RdrName)) }      -- Always HsForAllTys
 strict_mark :: { Located ([AddAnn],HsBang) }
         : '!'                        { sL1 $1 ([mj AnnBang $1]
                                               ,HsSrcBang Nothing                       Nothing      (Just True)) }
-        | '~'                        { sL1 $1 ([mj AnnBang $1]
+        | '~'                        { sL1 $1 ([mj AnnTilde $1]
                                               ,HsSrcBang Nothing                       Nothing      (Just False)) }
         | '{-# UNPACK' '#-}'         { sLL $1 $> ([mo $1,mc $2]
                                               ,HsSrcBang (Just $ getUNPACK_PRAGs $1)   (Just True)  Nothing) }
@@ -1580,9 +1580,9 @@ strict_mark :: { Located ([AddAnn],HsBang) }
                                               ,HsSrcBang (Just $ getUNPACK_PRAGs $1)   (Just True)  (Just True)) }
         | '{-# NOUNPACK' '#-}' '!'   { sLL $1 $> ([mo $1,mc $2,mj AnnBang $3]
                                               ,HsSrcBang (Just $ getNOUNPACK_PRAGs $1) (Just False) (Just True)) }
-        | '{-# UNPACK' '#-}' '~'     { sLL $1 $> ([mo $1,mc $2,mj AnnBang $3]
+        | '{-# UNPACK' '#-}' '~'     { sLL $1 $> ([mo $1,mc $2,mj AnnTilde $3]
                                               ,HsSrcBang (Just $ getUNPACK_PRAGs $1)   (Just True)  (Just False)) }
-        | '{-# NOUNPACK' '#-}' '~'   { sLL $1 $> ([mo $1,mc $2,mj AnnBang $3]
+        | '{-# NOUNPACK' '#-}' '~'   { sLL $1 $> ([mo $1,mc $2,mj AnnTilde $3]
                                               ,HsSrcBang (Just $ getNOUNPACK_PRAGs $1) (Just False) (Just False)) }
         -- Although UNPACK with no '!' and UNPACK with '~' are illegal, we get a
         -- better error message if we parse them here
