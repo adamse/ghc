@@ -537,7 +537,8 @@ tcExpr (RecordCon (L loc con_name) _ rbinds) res_ty
   = do  { data_con <- tcLookupDataCon con_name
 
         -- Check for missing fields
-        ; checkMissingFields data_con rbinds
+        ; dflags <- getDynFlags
+        ; checkMissingFields dflags data_con rbinds
 
         ; (con_expr, con_tau) <- tcInferId con_name
         ; let arity = dataConSourceArity data_con
@@ -1371,11 +1372,11 @@ tcRecordBinds data_con arg_tys (HsRecFields rbinds dd)
       = do { addErrTc (badFieldCon (RealDataCon data_con) field_lbl)
            ; return Nothing }
 
-checkMissingFields :: DataCon -> HsRecordBinds Name -> TcM ()
-checkMissingFields data_con rbinds
+checkMissingFields :: DynFlags -> DataCon -> HsRecordBinds Name -> TcM ()
+checkMissingFields dflags data_con rbinds
   | null field_labels   -- Not declared as a record;
                         -- But C{} is still valid if no strict fields
-  = if any isBanged field_strs then
+  = if any (isBanged dflags) field_strs then
         -- Illegal if any arg is strict
         addErrTc (missingStrictFields data_con [])
     else
@@ -1392,12 +1393,12 @@ checkMissingFields data_con rbinds
   where
     missing_s_fields
         = [ fl | (fl, str) <- field_info,
-                 isBanged str,
+                 isBanged dflags str,
                  not (fl `elem` field_names_used)
           ]
     missing_ns_fields
         = [ fl | (fl, str) <- field_info,
-                 not (isBanged str),
+                 not (isBanged dflags str),
                  not (fl `elem` field_names_used)
           ]
 

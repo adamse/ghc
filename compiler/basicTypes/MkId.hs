@@ -489,8 +489,8 @@ mkDataConRep dflags fam_envs wrap_name data_con
 
              wrap_sig = mkClosedStrictSig wrap_arg_dmds (dataConCPR data_con)
              wrap_arg_dmds = map mk_dmd (dropList eq_spec wrap_bangs)
-             mk_dmd str | isBanged str = evalDmd
-                        | otherwise    = topDmd
+             mk_dmd str | isBanged dflags str = evalDmd
+                        | otherwise           = topDmd
                  -- The Cpr info can be important inside INLINE rhss, where the
                  -- wrapper constructor isn't inlined.
                  -- And the argument strictness can be important too; we
@@ -534,8 +534,8 @@ mkDataConRep dflags fam_envs wrap_name data_con
     (rep_tys, rep_strs) = unzip (concat rep_tys_w_strs)
 
     wrapper_reqd = not (isNewTyCon tycon)  -- Newtypes have only a worker
-                && (any isBanged orig_bangs   -- Some forcing/unboxing
-                                              -- (includes eq_spec)
+                && (any (isBanged dflags) orig_bangs   -- Some forcing/unboxing
+                                                       -- (includes eq_spec)
                     || isFamInstTyCon tycon)  -- Cast result
 
     initial_wrap_app = Var (dataConWorkId data_con)
@@ -593,17 +593,14 @@ dataConArgRep
       , [(Type, StrictnessMark)]   -- Rep types
       , (Unboxer, Boxer) )
 
-dataConArgRep _ _ arg_ty HsNoBang
-  = (HsNoBang, [(arg_ty, NotMarkedStrict)], (unitUnboxer, unitBoxer))
-
 dataConArgRep dflags fam_envs arg_ty (HsSrcBang ann unpk Nothing) -- no strictness mark
   | xopt Opt_StrictData dflags -- StrictData => strict field
-  = dataConArgRep dflags fam_envs arg_ty (HsSrcBang ann unpk (Just True))
+  = pprTrace "strictdata" (ppr arg_ty) $ dataConArgRep dflags fam_envs arg_ty (HsSrcBang ann unpk (Just True))
   | otherwise -- no StrictData => lazy field
-  = (HsNoBang, [(arg_ty, NotMarkedStrict)], (unitUnboxer, unitBoxer))
+  = pprTrace "nostrictdata" (ppr arg_ty) $ (HsLazy, [(arg_ty, NotMarkedStrict)], (unitUnboxer, unitBoxer))
 
 dataConArgRep _ _ arg_ty (HsSrcBang _ _ (Just False)) -- explicitly lazy, '~'
-  = (HsNoBang, [(arg_ty, NotMarkedStrict)], (unitUnboxer, unitBoxer))
+  = pprTrace "lazy" (ppr arg_ty) (HsLazy, [(arg_ty, NotMarkedStrict)], (unitUnboxer, unitBoxer))
 
 dataConArgRep dflags fam_envs arg_ty
     (HsSrcBang _ unpk_prag (Just True))  -- {-# UNPACK #-} !
@@ -613,31 +610,34 @@ dataConArgRep dflags fam_envs arg_ty
   , let mb_co   = topNormaliseType_maybe fam_envs arg_ty
                      -- Unwrap type families and newtypes
         arg_ty' = case mb_co of { Just (_,ty) -> ty; Nothing -> arg_ty }
-  , isUnpackableType fam_envs arg_ty'
+  , isUnpackableType dflags fam_envs arg_ty'
   , (rep_tys, wrappers) <- dataConArgUnpack arg_ty'
   , case unpk_prag of
       Nothing -> gopt Opt_UnboxStrictFields dflags
               || (gopt Opt_UnboxSmallStrictFields dflags
                    && length rep_tys <= 1)  -- See Note [Unpack one-wide fields]
       Just unpack_me -> unpack_me
-  = case mb_co of
-      Nothing          -> (HsUnpack Nothing,   rep_tys, wrappers)
-      Just (co,rep_ty) -> (HsUnpack (Just co), rep_tys, wrapCo co rep_ty wrappers)
+  = pprTrace "strict unpk" (ppr arg_ty) $ case mb_co of
+              Nothing          -> (HsUnpack Nothing,   rep_tys, wrappers)
+              Just (co,rep_ty) -> (HsUnpack (Just co), rep_tys, wrapCo co rep_ty wrappers)
 
   | otherwise  -- Record the strict-but-no-unpack decision
-  = strict_but_not_unpacked arg_ty
+  = pprTrace "strict nounpk" (ppr arg_ty) $ strict_but_not_unpacked arg_ty
+
+dataConArgRep _ _ arg_ty HsLazy
+  = pprTrace "impl lazy" (ppr arg_ty) $ (HsLazy, [(arg_ty, NotMarkedStrict)], (unitUnboxer, unitBoxer))
 
 dataConArgRep _ _ arg_ty HsStrict
-  = strict_but_not_unpacked arg_ty
+  = pprTrace "impl strict" (ppr arg_ty) $ strict_but_not_unpacked arg_ty
 
 dataConArgRep _ _ arg_ty (HsUnpack Nothing)
   | (rep_tys, wrappers) <- dataConArgUnpack arg_ty
-  = (HsUnpack Nothing, rep_tys, wrappers)
+  = pprTrace "impl unpk" (ppr arg_ty) (HsUnpack Nothing, rep_tys, wrappers)
 
-dataConArgRep _ _ _ (HsUnpack (Just co))
+dataConArgRep _ _ arg_ty (HsUnpack (Just co))
   | let co_rep_ty = pSnd (coercionKind co)
   , (rep_tys, wrappers) <- dataConArgUnpack co_rep_ty
-  = (HsUnpack (Just co), rep_tys, wrapCo co co_rep_ty wrappers)
+  = pprTrace "impl unpk" (ppr arg_ty) (HsUnpack (Just co), rep_tys, wrapCo co co_rep_ty wrappers)
 
 strict_but_not_unpacked :: Type -> (HsImplBang, [(Type,StrictnessMark)], (Unboxer, Boxer))
 strict_but_not_unpacked arg_ty
@@ -701,13 +701,13 @@ dataConArgUnpack arg_ty
   = pprPanic "dataConArgUnpack" (ppr arg_ty)
     -- An interface file specified Unpacked, but we couldn't unpack it
 
-isUnpackableType :: FamInstEnvs -> Type -> Bool
+isUnpackableType :: DynFlags -> FamInstEnvs -> Type -> Bool
 -- True if we can unpack the UNPACK the argument type
 -- See Note [Recursive unboxing]
 -- We look "deeply" inside rather than relying on the DataCons
 -- we encounter on the way, because otherwise we might well
 -- end up relying on ourselves!
-isUnpackableType fam_envs ty
+isUnpackableType dflags fam_envs ty
   | Just (tc, _) <- splitTyConApp_maybe ty
   , Just con <- tyConSingleAlgDataCon_maybe tc
   , isVanillaDataCon con
@@ -736,11 +736,11 @@ isUnpackableType fam_envs ty
 
     attempt_unpack (HsUnpack {})                         = True
     attempt_unpack (HsSrcBang _ (Just unpk) (Just mark)) = mark && unpk
+    attempt_unpack (HsSrcBang _ (Just unpk) Nothing)     = xopt Opt_StrictData dflags && unpk
     attempt_unpack (HsSrcBang _  Nothing (Just mark))    = mark  -- Be conservative
-    attempt_unpack (HsSrcBang _ (Just _) Nothing)        = False -- does not make sense
-    attempt_unpack (HsSrcBang _  Nothing Nothing)        = False
+    attempt_unpack (HsSrcBang _  Nothing Nothing)        = xopt Opt_StrictData dflags
     attempt_unpack HsStrict                              = False
-    attempt_unpack HsNoBang                              = False
+    attempt_unpack HsLazy                                = False
 
 {-
 Note [Unpack one-wide fields]
@@ -808,7 +808,7 @@ space for each equality predicate, so it's pretty important!
 mk_pred_strict_mark :: PredType -> HsSrcBang
 mk_pred_strict_mark pred
   | isEqPred pred = HsUnpack Nothing    -- Note [Unpack equality predicates]
-  | otherwise     = HsNoBang
+  | otherwise     = HsLazy
 
 {-
 ************************************************************************
