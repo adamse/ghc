@@ -595,12 +595,12 @@ dataConArgRep
 
 dataConArgRep dflags fam_envs arg_ty (HsSrcBang ann unpk Nothing) -- no strictness mark
   | xopt Opt_StrictData dflags -- StrictData => strict field
-  = pprTrace "strictdata" (ppr arg_ty) $ dataConArgRep dflags fam_envs arg_ty (HsSrcBang ann unpk (Just True))
+  = dataConArgRep dflags fam_envs arg_ty (HsSrcBang ann unpk (Just True))
   | otherwise -- no StrictData => lazy field
-  = pprTrace "nostrictdata" (ppr arg_ty) $ (HsLazy, [(arg_ty, NotMarkedStrict)], (unitUnboxer, unitBoxer))
+  = (HsLazy, [(arg_ty, NotMarkedStrict)], (unitUnboxer, unitBoxer))
 
 dataConArgRep _ _ arg_ty (HsSrcBang _ _ (Just False)) -- explicitly lazy, '~'
-  = pprTrace "lazy" (ppr arg_ty) (HsLazy, [(arg_ty, NotMarkedStrict)], (unitUnboxer, unitBoxer))
+  = (HsLazy, [(arg_ty, NotMarkedStrict)], (unitUnboxer, unitBoxer))
 
 dataConArgRep dflags fam_envs arg_ty
     (HsSrcBang _ unpk_prag (Just True))  -- {-# UNPACK #-} !
@@ -617,27 +617,27 @@ dataConArgRep dflags fam_envs arg_ty
               || (gopt Opt_UnboxSmallStrictFields dflags
                    && length rep_tys <= 1)  -- See Note [Unpack one-wide fields]
       Just unpack_me -> unpack_me
-  = pprTrace "strict unpk" (ppr arg_ty) $ case mb_co of
-              Nothing          -> (HsUnpack Nothing,   rep_tys, wrappers)
-              Just (co,rep_ty) -> (HsUnpack (Just co), rep_tys, wrapCo co rep_ty wrappers)
+  = case mb_co of
+      Nothing          -> (HsUnpack Nothing,   rep_tys, wrappers)
+      Just (co,rep_ty) -> (HsUnpack (Just co), rep_tys, wrapCo co rep_ty wrappers)
 
   | otherwise  -- Record the strict-but-no-unpack decision
-  = pprTrace "strict nounpk" (ppr arg_ty) $ strict_but_not_unpacked arg_ty
+  = strict_but_not_unpacked arg_ty
 
 dataConArgRep _ _ arg_ty HsLazy
-  = pprTrace "impl lazy" (ppr arg_ty) $ (HsLazy, [(arg_ty, NotMarkedStrict)], (unitUnboxer, unitBoxer))
+  = (HsLazy, [(arg_ty, NotMarkedStrict)], (unitUnboxer, unitBoxer))
 
 dataConArgRep _ _ arg_ty HsStrict
-  = pprTrace "impl strict" (ppr arg_ty) $ strict_but_not_unpacked arg_ty
+  = strict_but_not_unpacked arg_ty
 
 dataConArgRep _ _ arg_ty (HsUnpack Nothing)
   | (rep_tys, wrappers) <- dataConArgUnpack arg_ty
-  = pprTrace "impl unpk" (ppr arg_ty) (HsUnpack Nothing, rep_tys, wrappers)
+  = (HsUnpack Nothing, rep_tys, wrappers)
 
 dataConArgRep _ _ arg_ty (HsUnpack (Just co))
   | let co_rep_ty = pSnd (coercionKind co)
   , (rep_tys, wrappers) <- dataConArgUnpack co_rep_ty
-  = pprTrace "impl unpk" (ppr arg_ty) (HsUnpack (Just co), rep_tys, wrapCo co co_rep_ty wrappers)
+  = (HsUnpack (Just co), rep_tys, wrapCo co co_rep_ty wrappers)
 
 strict_but_not_unpacked :: Type -> (HsImplBang, [(Type,StrictnessMark)], (Unboxer, Boxer))
 strict_but_not_unpacked arg_ty
