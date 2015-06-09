@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables, StrictData #-}
+{-# LANGUAGE ScopedTypeVariables, StrictData, GADTs #-}
 
 -- | Tests the StrictData LANGUAGE pragma.
 module Main where
@@ -8,17 +8,28 @@ import System.IO.Unsafe (unsafePerformIO)
 
 data Strict a = S a
 data Strict2 b = S2 !b
+data Strict3 c where
+  S3 :: c -> Strict3 c
+
 data UStrict = US {-# UNPACK #-} Int
 
-data Lazy c = L ~c
+data Lazy d = L {-# NOUNPACK #-} ~d
+
+data Lazy2 e where
+  L2 :: {-# NOUNPACK #-} ~e -> Lazy2 e
+
+--data Lazy3 f = L3 f ~f f
 
 main :: IO ()
 main =
   do print (isBottom (S bottom))
      print (isBottom (S2 bottom))
      print (isBottom (US bottom))
+     print (isBottom (S3 bottom))
      putStrLn ""
      print (not (isBottom (L bottom)))
+     print (not (isBottom (L2 bottom)))
+     print (not (isBottom (Just bottom))) -- sanity check
 
 ------------------------------------------------------------------------
 -- Support for testing for bottom
