@@ -13327,14 +13327,14 @@ Here are some examples:</para>
 
     <programlisting>
       data T = C a
-      data T' = C ~a
+      data T' = C' ~a
     </programlisting>
 
     <para>we interpret it as if she had written</para>
 
     <programlisting>
       data T = C !a
-      data T' = C a
+      data T' = C' a
     </programlisting>
 
     <para>The extension only affects definitions in this module.</para>
