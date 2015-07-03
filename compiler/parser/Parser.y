@@ -1584,8 +1584,8 @@ strict_mark :: { Located ([AddAnn],HsBang) }
                                               ,HsSrcBang (Just $ getUNPACK_PRAGs $1)   (Just True)  (Just False)) }
         | '{-# NOUNPACK' '#-}' '~'   { sLL $1 $> ([mo $1,mc $2,mj AnnTilde $3]
                                               ,HsSrcBang (Just $ getNOUNPACK_PRAGs $1) (Just False) (Just False)) }
-        -- Although UNPACK with no '!' and UNPACK with '~' are illegal, we get a
-        -- better error message if we parse them here
+        -- Although UNPACK with no '!' without StrictData and UNPACK with '~' are illegal,
+        -- we get a better error message if we parse them here
 
 -- A ctype is a for-all type
 ctype   :: { LHsType RdrName }

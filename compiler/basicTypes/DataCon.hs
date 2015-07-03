@@ -478,7 +478,9 @@ data HsBang
 
 -- | What the user wrote; hence always HsSrcBang
 type HsSrcBang = HsBang
--- | A HsBang implementation decision, as determined by the compiler
+
+-- | A HsBang implementation decision, as determined by the compiler.
+-- Never HsSrcBang
 type HsImplBang = HsBang
 
 -------------------------
