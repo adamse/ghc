@@ -1635,46 +1635,37 @@ ctypedoc :: { LHsType RdrName }
 -- Thus for some reason we allow    f :: a~b => blah
 -- but not                          f :: ?x::Int => blah
 context :: { LHsContext RdrName }
-        : btype '~'      btype          {% do { (anns,ctx) <- checkContext
-                                                 (sLL $1 $> $ HsEqTy $1 $3)
-                                              ; ams ctx (mj AnnTilde $2:anns) } }
-        | btype                         {% do { (anns,ctx) <- checkContext $1
-                                              ; if null (unLoc ctx)
-                                                 then addAnnotation (gl $1) AnnUnit (gl $1)
-                                                 else return ()
-                                              ; ams ctx anns
-                                              } }
+        :  btype                        {% do { (anns,ctx) <- checkContext (splitTilde $1)
+                                                ; if null (unLoc ctx)
+                                                   then addAnnotation (gl $1) AnnUnit (gl $1)
+                                                   else return ()
+                                                ; ams ctx anns
+                                                } }
 
 type :: { LHsType RdrName }
-        : btype                         { $1 }
+        : btype                         { splitTilde $1 }
         | btype qtyconop type           { sLL $1 $> $ mkHsOpTy $1 $2 $3 }
         | btype tyvarop  type           { sLL $1 $> $ mkHsOpTy $1 $2 $3 }
         | btype '->'     ctype          {% ams $1 [mj AnnRarrow $2]
-                                        >> ams (sLL $1 $> $ HsFunTy $1 $3)
+                                        >> ams (sLL $1 $> $ HsFunTy (splitTilde $1) $3)
                                                [mj AnnRarrow $2] }
-        | btype '~'      btype          {% ams (sLL $1 $> $ HsEqTy $1 $3)
-                                               [mj AnnTilde $2] }
-                                        -- see Note [Promotion]
         | btype SIMPLEQUOTE qconop type  {% ams (sLL $1 $> $ mkHsOpTy $1 $3 $4)
                                                 [mj AnnSimpleQuote $2] }
         | btype SIMPLEQUOTE varop  type  {% ams (sLL $1 $> $ mkHsOpTy $1 $3 $4)
                                                 [mj AnnSimpleQuote $2] }
 
 typedoc :: { LHsType RdrName }
-        : btype                          { $1 }
-        | btype docprev                  { sLL $1 $> $ HsDocTy $1 $2 }
+        : btype                          { splitTilde $1 }
+        | btype docprev                  { sLL $1 $> $ HsDocTy (splitTilde $1) $2 }
         | btype qtyconop type            { sLL $1 $> $ mkHsOpTy $1 $2 $3 }
         | btype qtyconop type docprev    { sLL $1 $> $ HsDocTy (L (comb3 $1 $2 $3) (mkHsOpTy $1 $2 $3)) $4 }
         | btype tyvarop  type            { sLL $1 $> $ mkHsOpTy $1 $2 $3 }
         | btype tyvarop  type docprev    { sLL $1 $> $ HsDocTy (L (comb3 $1 $2 $3) (mkHsOpTy $1 $2 $3)) $4 }
-        | btype '->'     ctypedoc        {% ams (sLL $1 $> $ HsFunTy $1 $3)
+        | btype '->'     ctypedoc        {% ams (sLL $1 $> $ HsFunTy (splitTilde $1) $3)
                                                 [mj AnnRarrow $2] }
-        | btype docprev '->' ctypedoc    {% ams (sLL $1 $> $ HsFunTy (L (comb2 $1 $2)
+        | btype docprev '->' ctypedoc    {% ams (sLL $1 $> $ HsFunTy (L (comb2 (splitTilde $1) $2)
                                                             (HsDocTy $1 $2)) $4)
                                                 [mj AnnRarrow $3] }
-        | btype '~'      btype           {% ams (sLL $1 $> $ HsEqTy $1 $3)
-                                                [mj AnnTilde $2] }
-                                        -- see Note [Promotion]
         | btype SIMPLEQUOTE qconop type  {% ams (sLL $1 $> $ mkHsOpTy $1 $3 $4)
                                                 [mj AnnSimpleQuote $2] }
         | btype SIMPLEQUOTE varop  type  {% ams (sLL $1 $> $ mkHsOpTy $1 $3 $4)
