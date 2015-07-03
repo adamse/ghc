@@ -498,16 +498,16 @@ flags like -funbox-small-strict-fields.
 
 Terminology:
   * HsSrcBang:  What the user wrote
-                Constructors: HsNoBang, HsUserBang
+                Constructors: HsSrcBang
 
   * HsImplBang: What GHC decided
-                Constructors: HsNoBang, HsStrict, HsUnpack
+                Constructors: HsLazy, HsStrict, HsUnpack
 
 * If T was defined in this module, MkT's dcSrcBangs field
   records the [HsSrcBang] of what the user wrote; in the example
-    [ HsSrcBang Nothing True
-    , HsSrcBang (Just True) True
-    , HsNoBang]
+    [ HsSrcBang Nothing (Just True)
+    , HsSrcBang (Just True) (Just True)
+    , HsSrcBang Nothing Nothing]
 
 * However, if T was defined in an imported module, MkT's dcSrcBangs
   field gives the [HsImplBang] recording the decisions of the
@@ -516,11 +516,13 @@ Terminology:
 
 * The dcr_bangs field of the dcRep field records the [HsImplBang]
   If T was defined in this module, Without -O the dcr_bangs might be
-    [HsStrict, HsStrict, HsNoBang]
+    [HsStrict, HsStrict, HsLazy]
   With -O it might be
-    [HsStrict, HsUnpack, HsNoBang]
+    [HsStrict, HsUnpack, HsLazy]
   With -funbox-small-strict-fields it might be
-    [HsUnpack, HsUnpack, HsNoBang]
+    [HsUnpack, HsUnpack, HsLazy]
+  With -XStrictData it might be
+    [HsStrict, HsUnpack, HsStrict]
 
 Note [Data con representation]
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
