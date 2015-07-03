@@ -1613,6 +1613,10 @@ checkValidDataCon dflags existential_ok tc con
     }
   where
     ctxt = ConArgCtxt (dataConName con)
+
+    check_bang (HsSrcBang _ _ (Just False), _, n)
+      | not (xopt Opt_StrictData dflags)
+      = addErrTc (bad_bang n (ptext (sLit "Lazy annotation (~) without StrictData")))
     check_bang (HsSrcBang _ (Just want_unpack) strict_mark, rep_bang, n)
       | want_unpack, not is_strict
       = addWarnTc (bad_bang n (ptext (sLit "UNPACK pragma lacks '!'")))
