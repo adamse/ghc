@@ -13,12 +13,9 @@ data Strict3 c where
 
 data UStrict = US {-# UNPACK #-} Int
 
-data Lazy d = L {-# NOUNPACK #-} ~d
-
+data Lazy d = L ~d
 data Lazy2 e where
-  L2 :: {-# NOUNPACK #-} ~e -> Lazy2 e
-
---data Lazy3 f = L3 f ~f f
+  L2 :: ~e -> Lazy2 e
 
 main :: IO ()
 main =
