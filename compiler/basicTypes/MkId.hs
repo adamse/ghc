@@ -634,7 +634,7 @@ dataConArgRep _ _ arg_ty (HsUnpack Nothing)
   | (rep_tys, wrappers) <- dataConArgUnpack arg_ty
   = (HsUnpack Nothing, rep_tys, wrappers)
 
-dataConArgRep _ _ arg_ty (HsUnpack (Just co))
+dataConArgRep _ _ _ (HsUnpack (Just co))
   | let co_rep_ty = pSnd (coercionKind co)
   , (rep_tys, wrappers) <- dataConArgUnpack co_rep_ty
   = (HsUnpack (Just co), rep_tys, wrapCo co co_rep_ty wrappers)
