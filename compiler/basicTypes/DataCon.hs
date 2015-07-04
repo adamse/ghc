@@ -604,13 +604,16 @@ instance Outputable StrictnessMark where
   ppr NotMarkedStrict  = empty
 
 
-eqHsBang :: HsBang -> HsBang -> Bool
-eqHsBang (HsSrcBang _ u1 b1)  (HsSrcBang _ u2 b2)  = u1==u2 && b1==b2
-eqHsBang HsLazy               HsLazy               = True
-eqHsBang HsStrict             HsStrict             = True
-eqHsBang (HsUnpack Nothing)   (HsUnpack Nothing)   = True
-eqHsBang (HsUnpack (Just c1)) (HsUnpack (Just c2)) = eqType (coercionType c1) (coercionType c2)
-eqHsBang _ _ = False
+-- | Compare strictness annotations
+eqHsBang :: DynFlags -> HsBang -> HsBang -> Bool
+eqHsBang _ (HsSrcBang _ u1 b1)  (HsSrcBang _ u2 b2)  = u1==u2 && b1==b2
+eqHsBang _ HsLazy               HsLazy               = True
+eqHsBang _ HsStrict             HsStrict             = True
+eqHsBang _ (HsUnpack Nothing)   (HsUnpack Nothing)   = True
+eqHsBang _ (HsUnpack (Just c1)) (HsUnpack (Just c2)) = eqType (coercionType c1) (coercionType c2)
+eqHsBang dflags (HsSrcBang _ _ Nothing) HsLazy       = not (xopt Opt_StrictData dflags)
+eqHsBang dflags HsLazy (HsSrcBang _ _ Nothing)       = not (xopt Opt_StrictData dflags)
+eqHsBang _ _ _                                       = False
 
 isBanged :: DynFlags -> HsBang -> Bool
 isBanged dflags (HsSrcBang _ _ Nothing) = xopt Opt_StrictData dflags
