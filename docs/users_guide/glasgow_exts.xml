@@ -12928,7 +12928,7 @@ Here are some examples:</para>
   <sect2 id="strict-data">
     <title>Strict-by-default data types</title>
 
-    <para>Informally the <literl>StrictData</literal> language
+    <para>Informally the <literal>StrictData</literal> language
     extension switches data type declarations to be strict by default
     allowing fields to be lazy by adding a <literal>~</literal> in
     front of the field.</para>
