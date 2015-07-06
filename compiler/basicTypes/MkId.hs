@@ -595,15 +595,15 @@ dataConArgRep
 
 dataConArgRep dflags fam_envs arg_ty (HsSrcBang ann unpk Nothing) -- no strictness mark
   | xopt Opt_StrictData dflags -- StrictData => strict field
-  = dataConArgRep dflags fam_envs arg_ty (HsSrcBang ann unpk (Just True))
+  = dataConArgRep dflags fam_envs arg_ty (HsSrcBang ann unpk (Just SrcStrict))
   | otherwise -- no StrictData => lazy field
   = (HsLazy, [(arg_ty, NotMarkedStrict)], (unitUnboxer, unitBoxer))
 
-dataConArgRep _ _ arg_ty (HsSrcBang _ _ (Just False)) -- explicitly lazy, '~'
+dataConArgRep _ _ arg_ty (HsSrcBang _ _ (Just SrcLazy))
   = (HsLazy, [(arg_ty, NotMarkedStrict)], (unitUnboxer, unitBoxer))
 
 dataConArgRep dflags fam_envs arg_ty
-    (HsSrcBang _ unpk_prag (Just True))  -- {-# UNPACK #-} !
+    (HsSrcBang _ unpk_prag (Just SrcStrict))  -- {-# UNPACK #-} !
   | not (gopt Opt_OmitInterfacePragmas dflags) -- Don't unpack if -fomit-iface-pragmas
           -- Don't unpack if we aren't optimising; rather arbitrarily,
           -- we use -fomit-iface-pragmas as the indication
@@ -616,7 +616,7 @@ dataConArgRep dflags fam_envs arg_ty
       Nothing -> gopt Opt_UnboxStrictFields dflags
               || (gopt Opt_UnboxSmallStrictFields dflags
                    && length rep_tys <= 1)  -- See Note [Unpack one-wide fields]
-      Just unpack_me -> unpack_me
+      Just srcUnpack -> isSrcUnpacked srcUnpack
   = case mb_co of
       Nothing          -> (HsUnpack Nothing,   rep_tys, wrappers)
       Just (co,rep_ty) -> (HsUnpack (Just co), rep_tys, wrapCo co rep_ty wrappers)
@@ -734,13 +734,20 @@ isUnpackableType dflags fam_envs ty
          -- NB: dataConSrcBangs gives the *user* request;
          -- We'd get a black hole if we used dataConImplBangs
 
-    attempt_unpack (HsUnpack {})                         = True
-    attempt_unpack (HsSrcBang _ (Just unpk) (Just mark)) = mark && unpk
-    attempt_unpack (HsSrcBang _ (Just unpk) Nothing)     = xopt Opt_StrictData dflags && unpk
-    attempt_unpack (HsSrcBang _  Nothing (Just mark))    = mark  -- Be conservative
-    attempt_unpack (HsSrcBang _  Nothing Nothing)        = xopt Opt_StrictData dflags
-    attempt_unpack HsStrict                              = False
-    attempt_unpack HsLazy                                = False
+    attempt_unpack (HsUnpack {})
+      = True
+    attempt_unpack (HsSrcBang _ (Just unpk) (Just mark))
+      = isSrcStrict mark && isSrcUnpacked unpk
+    attempt_unpack (HsSrcBang _ (Just unpk) Nothing)
+      = xopt Opt_StrictData dflags && isSrcUnpacked unpk
+    attempt_unpack (HsSrcBang _  Nothing (Just mark))
+      = isSrcStrict mark  -- Be conservative
+    attempt_unpack (HsSrcBang _  Nothing Nothing)
+      = xopt Opt_StrictData dflags -- Be conservative
+    attempt_unpack HsStrict
+      = False
+    attempt_unpack HsLazy
+      = False
 
 {-
 Note [Unpack one-wide fields]
@@ -805,7 +812,7 @@ heavy lifting.  This one line makes every GADT take a word less
 space for each equality predicate, so it's pretty important!
 -}
 
-mk_pred_strict_mark :: PredType -> HsSrcBang
+mk_pred_strict_mark :: PredType -> HsImplBang
 mk_pred_strict_mark pred
   | isEqPred pred = HsUnpack Nothing    -- Note [Unpack equality predicates]
   | otherwise     = HsLazy
