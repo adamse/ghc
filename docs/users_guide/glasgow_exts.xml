@@ -12918,19 +12918,20 @@ Here are some examples:</para>
 
   <para>High-performance Haskell code (e.g. numeric code) can
   sometimes be littered with bang patterns, making it harder to
-  read. The reason is that laziness isn't the right default in this
-  particular code but the programmer has no way to say that except by
-  repeatedly adding bang patterns. Below two language extensions,
-  <option>-XStrictData</option> and <option>-XStrict</option>, are
-  detailed that allow the programmer to switch the default behavior on
-  a per module basis.</para>
+  read. The reason is that lazy evaluation isn't the right default in
+  this particular code but the programmer has no way to say that
+  except by repeatedly adding bang patterns. Below two language
+  extensions, <option>-XStrictData</option> and
+  <option>-XStrict</option>, are detailed that allow the programmer to
+  switch the default behavior on a per-module basis.</para>
 
   <sect2 id="strict-data">
-    <title>Strict by default data types</title>
+    <title>Strict-by-default data types</title>
 
-    <para>Informally the StrictData language extension switches data
-    type declarations to be strict by default allowing fields to be
-    lazy by adding a ~ in front of the field.</para>
+    <para>Informally the <literl>StrictData</literal> language
+    extension switches data type declarations to be strict by default
+    allowing fields to be lazy by adding a <literal>~</literal> in
+    front of the field.</para>
 
     <para>When the user writes</para>
 

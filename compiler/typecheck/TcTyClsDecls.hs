@@ -1614,13 +1614,13 @@ checkValidDataCon dflags existential_ok tc con
   where
     ctxt = ConArgCtxt (dataConName con)
 
-    check_bang (HsSrcBang _ _ (Just False), _, n)
+    check_bang (HsSrcBang _ _ (Just SrcLazy), _, n)
       | not (xopt Opt_StrictData dflags)
       = addErrTc (bad_bang n (ptext (sLit "Lazy annotation (~) without StrictData")))
     check_bang (HsSrcBang _ (Just want_unpack) strict_mark, rep_bang, n)
-      | want_unpack, not is_strict
+      | isSrcUnpacked want_unpack, not is_strict
       = addWarnTc (bad_bang n (ptext (sLit "UNPACK pragma lacks '!'")))
-      | want_unpack
+      | isSrcUnpacked want_unpack
       , case rep_bang of { HsUnpack {} -> False; _ -> True }
       , not (gopt Opt_OmitInterfacePragmas dflags)
            -- If not optimising, se don't unpack, so don't complain!
@@ -1628,7 +1628,7 @@ checkValidDataCon dflags existential_ok tc con
       = addWarnTc (bad_bang n (ptext (sLit "Ignoring unusable UNPACK pragma")))
       where
         is_strict = case strict_mark of
-                      Just bang -> bang
+                      Just bang -> isSrcStrict bang
                       Nothing   -> xopt Opt_StrictData dflags
 
     check_bang _

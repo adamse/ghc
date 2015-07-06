@@ -29,6 +29,7 @@ module HsTypes (
         HsIPName(..), hsIPNameFS,
 
         LBangType, BangType, HsBang(..), HsSrcBang, HsImplBang,
+        SrcStrictness(..), SrcUnpackedness(..),
         getBangType, getBangStrictness,
 
         ConDeclField(..), LConDeclField, pprConDeclFields,
@@ -61,7 +62,7 @@ import PlaceHolder ( PostTc,PostRn,DataId,PlaceHolder(..) )
 
 import Name( Name )
 import RdrName( RdrName )
-import DataCon( HsBang(..), HsSrcBang, HsImplBang )
+import DataCon( HsBang(..), HsSrcBang, HsImplBang, SrcStrictness(..), SrcUnpackedness(..) )
 import TysPrim( funTyConName )
 import Type
 import HsDoc

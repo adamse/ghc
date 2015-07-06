@@ -1065,7 +1065,7 @@ isFunLhs e = go e [] []
 splitTilde :: LHsType RdrName -> LHsType RdrName
 splitTilde t = go t
   where go (L loc (HsAppTy t1 t2))
-          | L _ (HsBangTy (HsSrcBang Nothing Nothing (Just False)) t2') <- t2
+          | L _ (HsBangTy (HsSrcBang Nothing Nothing (Just SrcLazy)) t2') <- t2
           = L loc (HsEqTy (go t1) t2')
           | otherwise
           = case go t1 of
