@@ -720,7 +720,7 @@
         <tbody>
           <row>
             <entry><option>-fconstraint-solver-iterations=</option><replaceable>n</replaceable></entry>
-	    <entry>Set the iteration limit for the type-constraint solver.
+            <entry>Set the iteration limit for the type-constraint solver.
                    The default limit is 4. Typically one iteration
                    suffices; so please yell if you find you need to set
                    it higher than the default. Zero means infinity. </entry>

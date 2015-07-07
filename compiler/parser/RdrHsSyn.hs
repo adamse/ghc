@@ -1069,7 +1069,8 @@ splitTilde t = go t
           = L loc (HsEqTy (go t1) t2')
           | otherwise
           = case go t1 of
-              (L _ (HsEqTy tl tr)) -> L loc (HsEqTy tl (L (combineLocs tr t2) (HsAppTy tr t2)))
+              (L _ (HsEqTy tl tr)) ->
+                L loc (HsEqTy tl (L (combineLocs tr t2) (HsAppTy tr t2)))
               t -> L loc (HsAppTy t t2)
 
         go t = t

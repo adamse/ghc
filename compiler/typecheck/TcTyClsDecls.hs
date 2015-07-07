@@ -1616,7 +1616,8 @@ checkValidDataCon dflags existential_ok tc con
 
     check_bang (HsSrcBang _ _ SrcLazy, _, n)
       | not (xopt Opt_StrictData dflags)
-      = addErrTc (bad_bang n (ptext (sLit "Lazy annotation (~) without StrictData")))
+      = addErrTc
+          (bad_bang n (ptext (sLit "Lazy annotation (~) without StrictData")))
     check_bang (HsSrcBang _ want_unpack strict_mark, rep_bang, n)
       | isSrcUnpacked want_unpack, not is_strict
       = addWarnTc (bad_bang n (ptext (sLit "UNPACK pragma lacks '!'")))

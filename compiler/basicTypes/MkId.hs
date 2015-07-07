@@ -613,9 +613,10 @@ dataConArgRep dflags fam_envs arg_ty
   , isUnpackableType dflags fam_envs arg_ty'
   , (rep_tys, wrappers) <- dataConArgUnpack arg_ty'
   , case unpk_prag of
-      NoSrcUnpack -> gopt Opt_UnboxStrictFields dflags
-                         || (gopt Opt_UnboxSmallStrictFields dflags
-                              && length rep_tys <= 1)  -- See Note [Unpack one-wide fields]
+      NoSrcUnpack ->
+        gopt Opt_UnboxStrictFields dflags
+            || (gopt Opt_UnboxSmallStrictFields dflags
+                 && length rep_tys <= 1)  -- See Note [Unpack one-wide fields]
       srcUnpack -> isSrcUnpacked srcUnpack
   = case mb_co of
       Nothing          -> (HsUnpack Nothing,   rep_tys, wrappers)

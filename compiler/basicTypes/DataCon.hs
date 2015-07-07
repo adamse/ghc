@@ -631,18 +631,20 @@ instance Outputable StrictnessMark where
 
 -- | Compare strictness annotations
 eqHsBang :: HsBang -> HsBang -> Bool
-eqHsBang (HsSrcBang _ u1 b1)  (HsSrcBang _ u2 b2)  = u1==u2 && b1==b2
-eqHsBang HsLazy               HsLazy               = True
-eqHsBang HsStrict             HsStrict             = True
-eqHsBang (HsUnpack Nothing)   (HsUnpack Nothing)   = True
-eqHsBang (HsUnpack (Just c1)) (HsUnpack (Just c2)) = eqType (coercionType c1) (coercionType c2)
+eqHsBang (HsSrcBang _ u1 b1)  (HsSrcBang _ u2 b2) = u1==u2 && b1==b2
+eqHsBang HsLazy               HsLazy              = True
+eqHsBang HsStrict             HsStrict            = True
+eqHsBang (HsUnpack Nothing)   (HsUnpack Nothing)  = True
+eqHsBang (HsUnpack (Just c1)) (HsUnpack (Just c2))
+  = eqType (coercionType c1) (coercionType c2)
 eqHsBang _ _                                       = False
 
 isBanged :: HsImplBang -> Bool
-isBanged (HsUnpack {})  = True
-isBanged (HsStrict {})  = True
-isBanged HsLazy         = False
-isBanged (HsSrcBang {}) = panic "DataCon.isBanged: Cannot check bangedness of HsSrcBang."
+isBanged (HsUnpack {}) = True
+isBanged (HsStrict {}) = True
+isBanged HsLazy        = False
+isBanged (HsSrcBang {})
+  = panic "DataCon.isBanged: Cannot check bangedness of HsSrcBang."
 
 isSrcStrict :: SrcStrictness -> Bool
 isSrcStrict SrcStrict = True
@@ -666,22 +668,22 @@ isMarkedStrict _               = True   -- All others are strict
 
 -- | Build a new data constructor
 mkDataCon :: Name
-          -> Bool               -- ^ Is the constructor declared infix?
-          -> [HsBang]           -- ^ Strictness/unpack annotations, from user;
-                                --   or, for imported DataCons, from the interface file
-          -> [FieldLabel]       -- ^ Field labels for the constructor, if it is a record,
-                                --   otherwise empty
-          -> [TyVar]            -- ^ Universally quantified type variables
-          -> [TyVar]            -- ^ Existentially quantified type variables
-          -> [(TyVar,Type)]     -- ^ GADT equalities
-          -> ThetaType          -- ^ Theta-type occuring before the arguments proper
-          -> [Type]             -- ^ Original argument types
-          -> Type               -- ^ Original result type
-          -> TyCon              -- ^ Representation type constructor
-          -> ThetaType          -- ^ The "stupid theta", context of the data declaration
-                                --   e.g. @data Eq a => T a ...@
-          -> Id                 -- ^ Worker Id
-          -> DataConRep         -- ^ Representation
+          -> Bool           -- ^ Is the constructor declared infix?
+          -> [HsBang]       -- ^ Strictness/unpack annotations, from user; or,
+                            -- for imported DataCons, from the interface file
+          -> [FieldLabel]   -- ^ Field labels for the constructor,
+                            -- if it is a record, otherwise empty
+          -> [TyVar]        -- ^ Universally quantified type variables
+          -> [TyVar]        -- ^ Existentially quantified type variables
+          -> [(TyVar,Type)] -- ^ GADT equalities
+          -> ThetaType      -- ^ Theta-type occuring before the arguments proper
+          -> [Type]         -- ^ Original argument types
+          -> Type           -- ^ Original result type
+          -> TyCon          -- ^ Representation type constructor
+          -> ThetaType      -- ^ The "stupid theta", context of the data
+                            -- declaration e.g. @data Eq a => T a ...@
+          -> Id             -- ^ Worker Id
+          -> DataConRep     -- ^ Representation
           -> DataCon
   -- Can get the tag from the TyCon
 
