@@ -837,29 +837,28 @@ checkHiBootIface'
 checkBootDeclM :: Bool  -- ^ True <=> an hs-boot file (could also be a sig)
                -> TyThing -> TyThing -> TcM ()
 checkBootDeclM is_boot boot_thing real_thing
-  = do dflags <- getDynFlags
-       whenIsJust (checkBootDecl dflags boot_thing real_thing) $ \ err ->
-         addErrAt (nameSrcSpan (getName boot_thing))
-                  (bootMisMatch is_boot err real_thing boot_thing)
+  = whenIsJust (checkBootDecl boot_thing real_thing) $ \ err ->
+       addErrAt (nameSrcSpan (getName boot_thing))
+                (bootMisMatch is_boot err real_thing boot_thing)
 
 -- | Compares the two things for equivalence between boot-file and normal
 -- code. Returns @Nothing@ on success or @Just "some helpful info for user"@
 -- failure. If the difference will be apparent to the user, @Just empty@ is
 -- perfectly suitable.
-checkBootDecl :: DynFlags -> TyThing -> TyThing -> Maybe SDoc
+checkBootDecl :: TyThing -> TyThing -> Maybe SDoc
 
-checkBootDecl _ (AnId id1) (AnId id2)
+checkBootDecl (AnId id1) (AnId id2)
   = ASSERT(id1 == id2)
     check (idType id1 `eqType` idType id2)
           (text "The two types are different")
 
-checkBootDecl dflags (ATyCon tc1) (ATyCon tc2)
-  = checkBootTyCon dflags tc1 tc2
+checkBootDecl (ATyCon tc1) (ATyCon tc2)
+  = checkBootTyCon tc1 tc2
 
-checkBootDecl _ (AConLike (RealDataCon dc1)) (AConLike (RealDataCon _))
+checkBootDecl (AConLike (RealDataCon dc1)) (AConLike (RealDataCon _))
   = pprPanic "checkBootDecl" (ppr dc1)
 
-checkBootDecl _ _ _ = Just empty -- probably shouldn't happen
+checkBootDecl _ _ = Just empty -- probably shouldn't happen
 
 -- | Combines two potential error messages
 andThenCheck :: Maybe SDoc -> Maybe SDoc -> Maybe SDoc
@@ -901,8 +900,8 @@ checkSuccess :: Maybe SDoc
 checkSuccess = Nothing
 
 ----------------
-checkBootTyCon :: DynFlags -> TyCon -> TyCon -> Maybe SDoc
-checkBootTyCon dflags tc1 tc2
+checkBootTyCon :: TyCon -> TyCon -> Maybe SDoc
+checkBootTyCon tc1 tc2
   | not (eqKind (tyConKind tc1) (tyConKind tc2))
   = Just $ text "The types have different kinds"    -- First off, check the kind
 
@@ -935,7 +934,7 @@ checkBootTyCon dflags tc1 tc2
           op_ty2 = funResultTy rho_ty2
 
        eqAT (ATI tc1 def_ats1) (ATI tc2 def_ats2)
-         = checkBootTyCon dflags tc1 tc2 `andThenCheck`
+         = checkBootTyCon tc1 tc2 `andThenCheck`
            check (eqATDef def_ats1 def_ats2)
                  (text "The associated type defaults differ")
 
