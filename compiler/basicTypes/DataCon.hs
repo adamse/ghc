@@ -68,7 +68,6 @@ import BasicTypes
 import FastString
 import Module
 import VarEnv
-import DynFlags
 
 import qualified Data.Data as Data
 import qualified Data.Typeable
@@ -597,9 +596,9 @@ instance Data.Data DataCon where
 
 instance Outputable HsBang where
     ppr (HsSrcBang _ prag mark) = ppr prag <+> ppr mark
-    ppr HsLazy                  = empty
-    ppr (HsUnpack Nothing)      = ptext (sLit "Unpk")
-    ppr (HsUnpack (Just co))    = ptext (sLit "Unpk") <> parens (ppr co)
+    ppr HsLazy                  = ptext (sLit "Lazy")
+    ppr (HsUnpack Nothing)      = ptext (sLit "Unpacked")
+    ppr (HsUnpack (Just co))    = ptext (sLit "Unpacked") <> parens (ppr co)
     ppr HsStrict                = ptext (sLit "StrictNotUnpacked")
 
 instance Outputable SrcStrictness where
@@ -631,26 +630,19 @@ instance Outputable StrictnessMark where
 
 
 -- | Compare strictness annotations
-eqHsBang :: DynFlags -> HsBang -> HsBang -> Bool
-eqHsBang _ (HsSrcBang _ u1 b1)  (HsSrcBang _ u2 b2)  = u1==u2 && b1==b2
-
-eqHsBang _ HsLazy               HsLazy               = True
-eqHsBang _ HsStrict             HsStrict             = True
-eqHsBang _ (HsUnpack Nothing)   (HsUnpack Nothing)   = True
-eqHsBang _ (HsUnpack (Just c1)) (HsUnpack (Just c2)) = eqType (coercionType c1) (coercionType c2)
-
-eqHsBang dflags (HsSrcBang _ _ NoSrcStrictness) HsLazy       = not (xopt Opt_StrictData dflags)
-eqHsBang dflags HsLazy (HsSrcBang _ _ NoSrcStrictness)       = not (xopt Opt_StrictData dflags)
-
-eqHsBang _ _ _                                       = False
+eqHsBang :: HsBang -> HsBang -> Bool
+eqHsBang (HsSrcBang _ u1 b1)  (HsSrcBang _ u2 b2)  = u1==u2 && b1==b2
+eqHsBang HsLazy               HsLazy               = True
+eqHsBang HsStrict             HsStrict             = True
+eqHsBang (HsUnpack Nothing)   (HsUnpack Nothing)   = True
+eqHsBang (HsUnpack (Just c1)) (HsUnpack (Just c2)) = eqType (coercionType c1) (coercionType c2)
+eqHsBang _ _                                       = False
 
 isBanged :: HsImplBang -> Bool
---isBanged dflags (HsSrcBang _ _ Nothing)     = xopt Opt_StrictData dflags
---isBanged (HsSrcBang _ _ (Just SrcStrict)) = True
-isBanged (HsUnpack {})                    = True
-isBanged (HsStrict {})                    = True
-isBanged HsLazy                           = False
-isBanged _  = panic "Wrong! Checking bangedness of HsSrcBang!!"
+isBanged (HsUnpack {})  = True
+isBanged (HsStrict {})  = True
+isBanged HsLazy         = False
+isBanged (HsSrcBang {}) = panic "DataCon.isBanged: Cannot check bangedness of HsSrcBang."
 
 isSrcStrict :: SrcStrictness -> Bool
 isSrcStrict SrcStrict = True
