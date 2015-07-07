@@ -534,9 +534,9 @@ mkDataConRep dflags fam_envs wrap_name data_con
     (rep_tys, rep_strs) = unzip (concat rep_tys_w_strs)
 
     wrapper_reqd = not (isNewTyCon tycon)  -- Newtypes have only a worker
-                && (any isBanged wrap_bangs   -- Some forcing/unboxing
-                                                          -- (includes eq_spec)
-                    || isFamInstTyCon tycon)  -- Cast result
+                && (any isBanged wrap_bangs -- Some forcing/unboxing
+                                            -- (includes eq_spec)
+                    || isFamInstTyCon tycon) -- Cast result
 
     initial_wrap_app = Var (dataConWorkId data_con)
                       `mkTyApps`  res_ty_args
@@ -596,14 +596,15 @@ dataConArgRep
 dataConArgRep dflags fam_envs arg_ty (HsSrcBang ann unpk NoSrcStrictness)
   | xopt Opt_StrictData dflags -- StrictData => strict field
   = dataConArgRep dflags fam_envs arg_ty (HsSrcBang ann unpk SrcStrict)
-  | otherwise -- no StrictData => lazy field
+
+  | otherwise                  -- no StrictData => lazy field
   = (HsLazy, [(arg_ty, NotMarkedStrict)], (unitUnboxer, unitBoxer))
 
 dataConArgRep _ _ arg_ty (HsSrcBang _ _ SrcLazy)
   = (HsLazy, [(arg_ty, NotMarkedStrict)], (unitUnboxer, unitBoxer))
 
 dataConArgRep dflags fam_envs arg_ty
-    (HsSrcBang _ unpk_prag SrcStrict)  -- {-# UNPACK #-} ?
+    (HsSrcBang _ unpk_prag SrcStrict)
   | not (gopt Opt_OmitInterfacePragmas dflags) -- Don't unpack if -fomit-iface-pragmas
           -- Don't unpack if we aren't optimising; rather arbitrarily,
           -- we use -fomit-iface-pragmas as the indication
@@ -616,13 +617,13 @@ dataConArgRep dflags fam_envs arg_ty
       NoSrcUnpack ->
         gopt Opt_UnboxStrictFields dflags
             || (gopt Opt_UnboxSmallStrictFields dflags
-                 && length rep_tys <= 1)  -- See Note [Unpack one-wide fields]
+                && length rep_tys <= 1) -- See Note [Unpack one-wide fields]
       srcUnpack -> isSrcUnpacked srcUnpack
   = case mb_co of
       Nothing          -> (HsUnpack Nothing,   rep_tys, wrappers)
       Just (co,rep_ty) -> (HsUnpack (Just co), rep_tys, wrapCo co rep_ty wrappers)
 
-  | otherwise  -- Record the strict-but-no-unpack decision
+  | otherwise -- Record the strict-but-no-unpack decision
   = strict_but_not_unpacked arg_ty
 
 dataConArgRep _ _ arg_ty HsLazy

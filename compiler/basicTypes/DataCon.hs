@@ -477,13 +477,13 @@ data HsBang
 data SrcStrictness = SrcLazy -- ^ Lazy, ie '~'
                    | SrcStrict -- ^ Strict, ie '!'
                    | NoSrcStrictness -- ^ no strictness annotation
-     deriving (Data.Data, Data.Typeable)
+     deriving (Eq, Data.Data, Data.Typeable)
 
 -- | What unpackedness the user requested
 data SrcUnpackedness = SrcUnpack -- ^ {-# UNPACK #-} specified
                      | SrcNoUnpack -- ^ {-# NOUNPACK #-} specified
                      | NoSrcUnpack -- ^ no unpack pragma
-     deriving (Data.Data, Data.Typeable)
+     deriving (Eq, Data.Data, Data.Typeable)
 
 
 -- Two type-insecure, but useful, synonyms
@@ -606,23 +606,10 @@ instance Outputable SrcStrictness where
     ppr SrcStrict       = char '!'
     ppr NoSrcStrictness = empty
 
-
 instance Outputable SrcUnpackedness where
     ppr SrcUnpack   = ptext (sLit "{-# UNPACK #-}")
     ppr SrcNoUnpack = ptext (sLit "{-# NOUNPACK #-}")
     ppr NoSrcUnpack = empty
-
-instance Eq SrcStrictness where
-    SrcLazy         == SrcLazy         = True
-    SrcStrict       == SrcStrict       = True
-    NoSrcStrictness == NoSrcStrictness = True
-    _               == _               = False
-
-instance Eq SrcUnpackedness where
-    SrcUnpack == SrcUnpack = True
-    SrcNoUnpack == SrcNoUnpack = True
-    NoSrcUnpack == NoSrcUnpack = True
-    _ == _ = False
 
 instance Outputable StrictnessMark where
   ppr MarkedStrict     = ptext (sLit "!")
