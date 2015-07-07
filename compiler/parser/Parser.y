@@ -1566,24 +1566,21 @@ sigtypes1 :: { (OrdList (LHsType RdrName)) }      -- Always HsForAllTys
 -- Types
 
 strict_mark :: { Located ([AddAnn],HsBang) }
-        : '!'                        { sL1 $1 ([mj AnnBang $1]
-                                              ,HsSrcBang Nothing                       NoSrcUnpack SrcStrict) }
-        | '~'                        { sL1 $1 ([mj AnnTilde $1]
-                                              ,HsSrcBang Nothing                       NoSrcUnpack SrcLazy) }
-        | '{-# UNPACK' '#-}'         { sLL $1 $> ([mo $1,mc $2]
-                                              ,HsSrcBang (Just $ getUNPACK_PRAGs $1)   SrcUnpack NoSrcStrictness) }
-        | '{-# NOUNPACK' '#-}'       { sLL $1 $> ([mo $1,mc $2]
-                                              ,HsSrcBang (Just $ getNOUNPACK_PRAGs $1) SrcNoUnpack NoSrcStrictness) }
-        | '{-# UNPACK' '#-}' '!'     { sLL $1 $> ([mo $1,mc $2,mj AnnBang $3]
-                                              ,HsSrcBang (Just $ getUNPACK_PRAGs $1)   SrcUnpack SrcStrict) }
-        | '{-# NOUNPACK' '#-}' '!'   { sLL $1 $> ([mo $1,mc $2,mj AnnBang $3]
-                                              ,HsSrcBang (Just $ getNOUNPACK_PRAGs $1) SrcNoUnpack SrcStrict) }
-        | '{-# UNPACK' '#-}' '~'     { sLL $1 $> ([mo $1,mc $2,mj AnnTilde $3]
-                                              ,HsSrcBang (Just $ getUNPACK_PRAGs $1)   SrcUnpack SrcLazy) }
-        | '{-# NOUNPACK' '#-}' '~'   { sLL $1 $> ([mo $1,mc $2,mj AnnTilde $3]
-                                              ,HsSrcBang (Just $ getNOUNPACK_PRAGs $1) SrcNoUnpack SrcLazy) }
+        : strictness { sL1 $1 (let (a, str) = unLoc $1 in (a, HsSrcBang Nothing NoSrcUnpack str)) }
+        | unpackedness { sL1 $1 (let (a, prag, unpk) = unLoc $1 in (a, HsSrcBang prag unpk NoSrcStrictness)) }
+        | unpackedness strictness { sLL $1 $> (let { (a, prag, unpk) = unLoc $1
+                                                   ; (a', str) = unLoc $2 }
+                                                in (a ++ a', HsSrcBang prag unpk str)) }
         -- Although UNPACK with no '!' without StrictData and UNPACK with '~' are illegal,
         -- we get a better error message if we parse them here
+
+strictness :: { Located ([AddAnn], SrcStrictness) }
+        : '!' { sL1 $1 ([mj AnnBang $1], SrcStrict) }
+        | '~' { sL1 $1 ([mj AnnTilde $1], SrcLazy) }
+
+unpackedness :: { Located ([AddAnn], Maybe SourceText, SrcUnpackedness) }
+        : '{-# UNPACK' '#-}'   { sLL $1 $> ([mo $1, mc $2], Just $ getUNPACK_PRAGs $1, SrcUnpack) }
+        | '{-# NOUNPACK' '#-}' { sLL $1 $> ([mo $1, mc $2], Just $ getNOUNPACK_PRAGs $1, SrcNoUnpack) }
 
 -- A ctype is a for-all type
 ctype   :: { LHsType RdrName }
