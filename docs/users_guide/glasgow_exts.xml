@@ -13311,10 +13311,9 @@ Here are some examples:</para>
   sometimes be littered with bang patterns, making it harder to
   read. The reason is that lazy evaluation isn't the right default in
   this particular code but the programmer has no way to say that
-  except by repeatedly adding bang patterns. Below two language
-  extensions, <option>-XStrictData</option> and
-  <option>-XStrict</option>, are detailed that allow the programmer to
-  switch the default behavior on a per-module basis.</para>
+  except by repeatedly adding bang patterns. Below
+  <option>-XStrictData</option> is detailed that allows the programmer
+  to switch the default behavior on a per-module basis.</para>
 
   <sect2 id="strict-data">
     <title>Strict-by-default data types</title>

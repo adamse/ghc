@@ -469,7 +469,7 @@ data HsBang
   -- after consulting HsSrcBang, flags, etc
   | HsLazy -- ^ Definite commitment: Lazy field
   | HsStrict -- ^ Definite commitment: Strict but not unpacked field
-  | HsUnpack -- ^ Definitie commitment: Strict and unpacked field
+  | HsUnpack -- ^ Definite commitment: Strict and unpacked field
       (Maybe Coercion) -- co :: arg-ty ~ product-ty
   deriving (Data.Data, Data.Typeable)
 
