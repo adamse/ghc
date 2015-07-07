@@ -1614,10 +1614,10 @@ checkValidDataCon dflags existential_ok tc con
   where
     ctxt = ConArgCtxt (dataConName con)
 
-    check_bang (HsSrcBang _ _ (Just SrcLazy), _, n)
+    check_bang (HsSrcBang _ _ SrcLazy, _, n)
       | not (xopt Opt_StrictData dflags)
       = addErrTc (bad_bang n (ptext (sLit "Lazy annotation (~) without StrictData")))
-    check_bang (HsSrcBang _ (Just want_unpack) strict_mark, rep_bang, n)
+    check_bang (HsSrcBang _ want_unpack strict_mark, rep_bang, n)
       | isSrcUnpacked want_unpack, not is_strict
       = addWarnTc (bad_bang n (ptext (sLit "UNPACK pragma lacks '!'")))
       | isSrcUnpacked want_unpack
@@ -1628,8 +1628,8 @@ checkValidDataCon dflags existential_ok tc con
       = addWarnTc (bad_bang n (ptext (sLit "Ignoring unusable UNPACK pragma")))
       where
         is_strict = case strict_mark of
-                      Just bang -> isSrcStrict bang
-                      Nothing   -> xopt Opt_StrictData dflags
+                      NoSrcStrictness -> xopt Opt_StrictData dflags
+                      bang            -> isSrcStrict bang
 
     check_bang _
       = return ()
@@ -1641,8 +1641,7 @@ checkValidDataCon dflags existential_ok tc con
 checkNewDataCon :: DataCon -> TcM ()
 -- Further checks for the data constructor of a newtype
 checkNewDataCon con
-  = do  { dflags <- getDynFlags
-        ; checkTc (isSingleton arg_tys) (newtypeFieldErr con (length arg_tys))
+  = do  { checkTc (isSingleton arg_tys) (newtypeFieldErr con (length arg_tys))
               -- One argument
 
         ; check_con (null eq_spec) $
@@ -1656,7 +1655,7 @@ checkNewDataCon con
           ptext (sLit "A newtype constructor cannot have existential type variables")
                 -- No existentials
 
-        ; checkTc (not (any (isBanged dflags) (dataConSrcBangs con)))
+        ; checkTc (not (any isBanged (dataConImplBangs con)))
                   (newtypeStrictError con)
                 -- No strictness
     }

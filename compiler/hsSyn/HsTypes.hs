@@ -98,7 +98,7 @@ getBangType ty                    = ty
 
 getBangStrictness :: LHsType a -> HsSrcBang
 getBangStrictness (L _ (HsBangTy s _)) = s
-getBangStrictness _                    = HsSrcBang Nothing Nothing Nothing
+getBangStrictness _                    = HsSrcBang Nothing NoSrcUnpack NoSrcStrictness
 
 {-
 ************************************************************************

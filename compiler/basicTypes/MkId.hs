@@ -489,7 +489,7 @@ mkDataConRep dflags fam_envs wrap_name data_con
 
              wrap_sig = mkClosedStrictSig wrap_arg_dmds (dataConCPR data_con)
              wrap_arg_dmds = map mk_dmd (dropList eq_spec wrap_bangs)
-             mk_dmd str | isBanged dflags str = evalDmd
+             mk_dmd str | isBanged str = evalDmd
                         | otherwise           = topDmd
                  -- The Cpr info can be important inside INLINE rhss, where the
                  -- wrapper constructor isn't inlined.
@@ -534,8 +534,8 @@ mkDataConRep dflags fam_envs wrap_name data_con
     (rep_tys, rep_strs) = unzip (concat rep_tys_w_strs)
 
     wrapper_reqd = not (isNewTyCon tycon)  -- Newtypes have only a worker
-                && (any (isBanged dflags) orig_bangs   -- Some forcing/unboxing
-                                                       -- (includes eq_spec)
+                && (any isBanged wrap_bangs   -- Some forcing/unboxing
+                                                          -- (includes eq_spec)
                     || isFamInstTyCon tycon)  -- Cast result
 
     initial_wrap_app = Var (dataConWorkId data_con)
@@ -593,17 +593,17 @@ dataConArgRep
       , [(Type, StrictnessMark)]   -- Rep types
       , (Unboxer, Boxer) )
 
-dataConArgRep dflags fam_envs arg_ty (HsSrcBang ann unpk Nothing) -- no strictness mark
+dataConArgRep dflags fam_envs arg_ty (HsSrcBang ann unpk NoSrcStrictness)
   | xopt Opt_StrictData dflags -- StrictData => strict field
-  = dataConArgRep dflags fam_envs arg_ty (HsSrcBang ann unpk (Just SrcStrict))
+  = dataConArgRep dflags fam_envs arg_ty (HsSrcBang ann unpk SrcStrict)
   | otherwise -- no StrictData => lazy field
   = (HsLazy, [(arg_ty, NotMarkedStrict)], (unitUnboxer, unitBoxer))
 
-dataConArgRep _ _ arg_ty (HsSrcBang _ _ (Just SrcLazy))
+dataConArgRep _ _ arg_ty (HsSrcBang _ _ SrcLazy)
   = (HsLazy, [(arg_ty, NotMarkedStrict)], (unitUnboxer, unitBoxer))
 
 dataConArgRep dflags fam_envs arg_ty
-    (HsSrcBang _ unpk_prag (Just SrcStrict))  -- {-# UNPACK #-} !
+    (HsSrcBang _ unpk_prag SrcStrict)  -- {-# UNPACK #-} ?
   | not (gopt Opt_OmitInterfacePragmas dflags) -- Don't unpack if -fomit-iface-pragmas
           -- Don't unpack if we aren't optimising; rather arbitrarily,
           -- we use -fomit-iface-pragmas as the indication
@@ -613,10 +613,10 @@ dataConArgRep dflags fam_envs arg_ty
   , isUnpackableType dflags fam_envs arg_ty'
   , (rep_tys, wrappers) <- dataConArgUnpack arg_ty'
   , case unpk_prag of
-      Nothing -> gopt Opt_UnboxStrictFields dflags
-              || (gopt Opt_UnboxSmallStrictFields dflags
-                   && length rep_tys <= 1)  -- See Note [Unpack one-wide fields]
-      Just srcUnpack -> isSrcUnpacked srcUnpack
+      NoSrcUnpack -> gopt Opt_UnboxStrictFields dflags
+                         || (gopt Opt_UnboxSmallStrictFields dflags
+                              && length rep_tys <= 1)  -- See Note [Unpack one-wide fields]
+      srcUnpack -> isSrcUnpacked srcUnpack
   = case mb_co of
       Nothing          -> (HsUnpack Nothing,   rep_tys, wrappers)
       Just (co,rep_ty) -> (HsUnpack (Just co), rep_tys, wrapCo co rep_ty wrappers)
@@ -736,18 +736,19 @@ isUnpackableType dflags fam_envs ty
 
     attempt_unpack (HsUnpack {})
       = True
-    attempt_unpack (HsSrcBang _ (Just unpk) (Just mark))
-      = isSrcStrict mark && isSrcUnpacked unpk
-    attempt_unpack (HsSrcBang _ (Just unpk) Nothing)
-      = xopt Opt_StrictData dflags && isSrcUnpacked unpk
-    attempt_unpack (HsSrcBang _  Nothing (Just mark))
-      = isSrcStrict mark  -- Be conservative
-    attempt_unpack (HsSrcBang _  Nothing Nothing)
-      = xopt Opt_StrictData dflags -- Be conservative
     attempt_unpack HsStrict
       = False
     attempt_unpack HsLazy
       = False
+    attempt_unpack (HsSrcBang _ SrcUnpack NoSrcStrictness)
+      = xopt Opt_StrictData dflags
+    attempt_unpack (HsSrcBang _ SrcUnpack SrcStrict)
+      = True
+    attempt_unpack (HsSrcBang _  NoSrcUnpack SrcStrict)
+      = True  -- Be conservative
+    attempt_unpack (HsSrcBang _  NoSrcUnpack NoSrcStrictness)
+      = xopt Opt_StrictData dflags -- Be conservative
+    attempt_unpack _ = False
 
 {-
 Note [Unpack one-wide fields]

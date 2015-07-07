@@ -1567,21 +1567,21 @@ sigtypes1 :: { (OrdList (LHsType RdrName)) }      -- Always HsForAllTys
 
 strict_mark :: { Located ([AddAnn],HsBang) }
         : '!'                        { sL1 $1 ([mj AnnBang $1]
-                                              ,HsSrcBang Nothing                       Nothing      (Just SrcStrict)) }
+                                              ,HsSrcBang Nothing                       NoSrcUnpack SrcStrict) }
         | '~'                        { sL1 $1 ([mj AnnTilde $1]
-                                              ,HsSrcBang Nothing                       Nothing      (Just SrcLazy)) }
+                                              ,HsSrcBang Nothing                       NoSrcUnpack SrcLazy) }
         | '{-# UNPACK' '#-}'         { sLL $1 $> ([mo $1,mc $2]
-                                              ,HsSrcBang (Just $ getUNPACK_PRAGs $1)   (Just SrcUnpack)  Nothing) }
+                                              ,HsSrcBang (Just $ getUNPACK_PRAGs $1)   SrcUnpack NoSrcStrictness) }
         | '{-# NOUNPACK' '#-}'       { sLL $1 $> ([mo $1,mc $2]
-                                              ,HsSrcBang (Just $ getNOUNPACK_PRAGs $1) (Just SrcNoUnpack) Nothing) }
+                                              ,HsSrcBang (Just $ getNOUNPACK_PRAGs $1) SrcNoUnpack NoSrcStrictness) }
         | '{-# UNPACK' '#-}' '!'     { sLL $1 $> ([mo $1,mc $2,mj AnnBang $3]
-                                              ,HsSrcBang (Just $ getUNPACK_PRAGs $1)   (Just SrcUnpack)  (Just SrcStrict)) }
+                                              ,HsSrcBang (Just $ getUNPACK_PRAGs $1)   SrcUnpack SrcStrict) }
         | '{-# NOUNPACK' '#-}' '!'   { sLL $1 $> ([mo $1,mc $2,mj AnnBang $3]
-                                              ,HsSrcBang (Just $ getNOUNPACK_PRAGs $1) (Just SrcNoUnpack) (Just SrcStrict)) }
+                                              ,HsSrcBang (Just $ getNOUNPACK_PRAGs $1) SrcNoUnpack SrcStrict) }
         | '{-# UNPACK' '#-}' '~'     { sLL $1 $> ([mo $1,mc $2,mj AnnTilde $3]
-                                              ,HsSrcBang (Just $ getUNPACK_PRAGs $1)   (Just SrcUnpack)  (Just SrcLazy)) }
+                                              ,HsSrcBang (Just $ getUNPACK_PRAGs $1)   SrcUnpack SrcLazy) }
         | '{-# NOUNPACK' '#-}' '~'   { sLL $1 $> ([mo $1,mc $2,mj AnnTilde $3]
-                                              ,HsSrcBang (Just $ getNOUNPACK_PRAGs $1) (Just SrcNoUnpack) (Just SrcLazy)) }
+                                              ,HsSrcBang (Just $ getNOUNPACK_PRAGs $1) SrcNoUnpack SrcLazy) }
         -- Although UNPACK with no '!' without StrictData and UNPACK with '~' are illegal,
         -- we get a better error message if we parse them here
 
