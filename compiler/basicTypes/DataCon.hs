@@ -456,11 +456,11 @@ data DataConRep
 data HsBang
   -- | What the user wrote in the source code.
   --
-  -- (HsSrcBang _ (Just SrcUnpack) (Just SrcLazy)) and (HsSrcBang _
-  -- (Just SrcUnpack) Nothing) (without StrictData) makes no sense, we
-  -- emit a warning (in checkValidDataCon) and treat it like
-  -- (HsSrcBang _ Nothing (Just SrcLazy)
-  = HsSrcBang    -- What the user wrote in the source code
+  -- (HsSrcBang _ SrcUnpack SrcLazy) and (HsSrcBang _ SrcUnpack
+  -- NoSrcStrictness) (without StrictData) makes no sense, we emit a
+  -- warning (in checkValidDataCon) and treat it like (HsSrcBang _
+  -- NoSrcUnpack SrcLazy)
+  = HsSrcBang
        (Maybe SourceText) -- Note [Pragma source text] in BasicTypes
        SrcUnpackedness
        SrcStrictness
@@ -518,9 +518,9 @@ Terminology:
 
 * If T was defined in this module, MkT's dcSrcBangs field
   records the [HsSrcBang] of what the user wrote; in the example
-    [ HsSrcBang _ Nothing (Just SrcStrict)
-    , HsSrcBang _ (Just SrcUnpack) (Just SrcStrict)
-    , HsSrcBang _ Nothing Nothing]
+    [ HsSrcBang _ NoSrcUnpack SrcStrict
+    , HsSrcBang _ SrcUnpack SrcStrict
+    , HsSrcBang _ NoSrcUnpack NoSrcStrictness]
 
 * However, if T was defined in an imported module, MkT's dcSrcBangs
   field gives the [HsImplBang] recording the decisions of the
@@ -531,11 +531,11 @@ Terminology:
   If T was defined in this module, Without -O the dcr_bangs might be
     [HsStrict, HsStrict, HsLazy]
   With -O it might be
-    [HsStrict, HsUnpack, HsLazy]
+    [HsStrict, HsUnpack _, HsLazy]
   With -funbox-small-strict-fields it might be
-    [HsUnpack, HsUnpack, HsLazy]
+    [HsUnpack, HsUnpack _, HsLazy]
   With -XStrictData it might be
-    [HsStrict, HsUnpack, HsStrict]
+    [HsStrict, HsUnpack _, HsStrict]
 
 Note [Data con representation]
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
