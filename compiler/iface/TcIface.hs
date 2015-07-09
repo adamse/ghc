@@ -554,12 +554,12 @@ tcIfaceDataCons tycon_name tycon tc_tyvars if_cons
         ; return con }
     mk_doc con_name = ptext (sLit "Constructor") <+> ppr con_name
 
-    tc_strict :: IfaceBang -> IfL HsImplBang
-    tc_strict IfNoBang = return HsLazy
-    tc_strict IfStrict = return HsStrict
-    tc_strict IfUnpack = return (HsUnpack Nothing)
+    tc_strict :: IfaceBang -> IfL HsBang
+    tc_strict IfNoBang = return (ImplBang HsLazy)
+    tc_strict IfStrict = return (ImplBang HsStrict)
+    tc_strict IfUnpack = return (ImplBang (HsUnpack Nothing))
     tc_strict (IfUnpackCo if_co) = do { co <- tcIfaceCo if_co
-                                      ; return (HsUnpack (Just co)) }
+                                      ; return (ImplBang (HsUnpack (Just co))) }
 
 tcIfaceEqSpec :: IfaceEqSpec -> IfL [(TyVar, Type)]
 tcIfaceEqSpec spec

@@ -1240,7 +1240,7 @@ tcConDecl new_or_data rep_tycon tmpl_tvs res_tmpl        -- Data types
            buildOneDataCon (L _ name) = do
              { is_infix <- tcConIsInfix name hs_details res_ty
              ; buildDataCon fam_envs name is_infix
-                            stricts field_lbls
+                            (map SrcBang stricts) field_lbls
                             univ_tvs ex_tvs eq_preds ctxt arg_tys
                             res_ty' rep_tycon
                   -- NB:  we put data_tc, the type constructor gotten from the
@@ -1645,11 +1645,11 @@ checkValidDataCon dflags existential_ok tc con
   where
     ctxt = ConArgCtxt (dataConName con)
 
-    check_bang (HsSrcBang _ _ SrcLazy, _, n)
+    check_bang (SrcBang (HsSrcBang _ _ SrcLazy), _, n)
       | not (xopt Opt_StrictData dflags)
       = addErrTc
           (bad_bang n (ptext (sLit "Lazy annotation (~) without StrictData")))
-    check_bang (HsSrcBang _ want_unpack strict_mark, rep_bang, n)
+    check_bang (SrcBang (HsSrcBang _ want_unpack strict_mark), rep_bang, n)
       | isSrcUnpacked want_unpack, not is_strict
       = addWarnTc (bad_bang n (ptext (sLit "UNPACK pragma lacks '!'")))
       | isSrcUnpacked want_unpack
