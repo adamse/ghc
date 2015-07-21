@@ -817,9 +817,9 @@ matchWrapper ctxt (MG { mg_alts = matches
 
     -- If the user has specified Strict we want to change the patterns
     strictify pat = case unLoc pat of
-                      LazyPat pat' -> unLoc pat'
-                      pat'@(BangPat _) -> pat'
-                      _ -> BangPat pat
+                      LazyPat pat' -> unLoc pat' -- ~ -> normal patterns
+                      pat'@(BangPat _) -> pat'   -- ! -> strict pattern
+                      _ -> BangPat pat           -- others -> strict
 
 
 matchEquations  :: HsMatchContext Name
