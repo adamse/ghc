@@ -1629,6 +1629,7 @@ ctypedoc :: { LHsType RdrName }
 -- to permit an individual equational constraint without parenthesis.
 -- Thus for some reason we allow    f :: a~b => blah
 -- but not                          f :: ?x::Int => blah
+-- See Note [Parsing ~]
 context :: { LHsContext RdrName }
         :  btype                        {% do { (anns,ctx) <- checkContext (splitTilde $1)
                                                 ; if null (unLoc ctx)
@@ -1636,7 +1637,7 @@ context :: { LHsContext RdrName }
                                                    else return ()
                                                 ; ams ctx anns
                                                 } }
-
+-- See Note [Parsing ~]
 type :: { LHsType RdrName }
         : btype                         { splitTilde $1 }
         | btype qtyconop type           { sLL $1 $> $ mkHsOpTy $1 $2 $3 }
@@ -1648,7 +1649,7 @@ type :: { LHsType RdrName }
                                                 [mj AnnSimpleQuote $2] }
         | btype SIMPLEQUOTE varop  type  {% ams (sLL $1 $> $ mkHsOpTy $1 $3 $4)
                                                 [mj AnnSimpleQuote $2] }
-
+-- See Note [Parsing ~]
 typedoc :: { LHsType RdrName }
         : btype                          { splitTilde $1 }
         | btype docprev                  { sLL $1 $> $ HsDocTy (splitTilde $1) $2 }
@@ -1784,6 +1785,23 @@ fd :: { Located (FunDep (Located RdrName)) }
 varids0 :: { Located [Located RdrName] }
         : {- empty -}                   { noLoc [] }
         | varids0 tyvar                 { sLL $1 $> ($2 : unLoc $1) }
+
+{-
+Note [Parsing ~]
+~~~~~~~~~~~~~~~~
+
+Due to parsing conflicts between lazyness annotations in data type
+declarations (see strict_mark) and equality types ~'s are always
+parsed as lazyness annotations, and turned into HsEqTy's in the
+correct places using RdrHsSyn.splitTilde.
+
+Since strict_mark is parsed as part of atype which is part of type,
+typedoc and context (where HsEqTy previously appeared) it made most
+sense and was simplest to parse ~ as part of strict_mark and later
+turn them into HsEqTy's.
+
+-}
+
 
 -----------------------------------------------------------------------------
 -- Kinds
