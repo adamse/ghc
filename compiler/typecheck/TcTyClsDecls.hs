@@ -1656,14 +1656,19 @@ checkNewDataCon con
           ptext (sLit "A newtype constructor cannot have existential type variables")
                 -- No existentials
 
-        ; checkTc (not (any isBanged (dataConImplBangs con)))
+        ; checkTc (all ok_bang (dataConSrcBangs con))
                   (newtypeStrictError con)
-                -- No strictness
+                -- No strictness annotations
     }
   where
     (_univ_tvs, ex_tvs, eq_spec, theta, arg_tys, _res_ty) = dataConFullSig con
+
     check_con what msg
        = checkTc what (msg $$ ppr con <+> dcolon <+> ppr (dataConUserType con))
+
+    ok_bang (HsSrcBang _ _ SrcStrict) = False
+    ok_bang (HsSrcBang _ _ SrcLazy)   = False
+    ok_bang _                         = True
 
 -------------------------------
 checkValidClass :: Class -> TcM ()
