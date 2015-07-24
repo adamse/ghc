@@ -10,7 +10,7 @@
 module DataCon (
         -- * Main data types
         DataCon, DataConRep(..),
-        HsBang(..), SrcStrictness(..), SrcUnpackedness(..),
+        SrcStrictness(..), SrcUnpackedness(..),
         HsSrcBang(..), HsImplBang(..),
         StrictnessMark(..),
         ConTag,
@@ -347,7 +347,7 @@ data DataCon
                 -- The OrigResTy is T [a], but the dcRepTyCon might be :T123
 
         -- Now the strictness annotations and field labels of the constructor
-        dcSrcBangs :: [HsBang],
+        dcSrcBangs :: [HsSrcBang],
                 -- See Note [Bangs on data constructor arguments]
                 -- For DataCons defined in this module:
                 --    the [HsSrcBang] as written by the programmer.
@@ -448,17 +448,6 @@ data DataConRep
 -- when we bring bits of unfoldings together.)
 
 -------------------------
--- | HsBang describes the strictness/unpack status of one
--- of the original data constructor arguments (i.e. *not*
--- of the representation data constructor which may have
--- more arguments after the originals have been unpacked)
--- See Note [Bangs on data constructor arguments]
-data HsBang
-  -- | What the user wrote in the source code
-  = SrcBang HsSrcBang
-  -- | From imported types HsImplBangs
-  | ImplBang HsImplBang
-  deriving (Data.Data, Data.Typeable)
 
 -- | What the user wrote in the source code.
 --
@@ -484,7 +473,7 @@ data HsImplBang
 -- | What strictness annotation the user wrote
 data SrcStrictness = SrcLazy -- ^ Lazy, ie '~'
                    | SrcStrict -- ^ Strict, ie '!'
-                   | NoSrcStrictness -- ^ no strictness annotation
+                   | NoSrcStrict -- ^ no strictness annotation
      deriving (Eq, Data.Data, Data.Typeable)
 
 -- | What unpackedness the user requested
@@ -594,10 +583,6 @@ instance Data.Data DataCon where
     gunfold _ _  = error "gunfold"
     dataTypeOf _ = mkNoRepType "DataCon"
 
-instance Outputable HsBang where
-    ppr (SrcBang bang)         = ppr bang
-    ppr (ImplBang bang) = ppr bang
-
 instance Outputable HsSrcBang where
     ppr (HsSrcBang _ prag mark) = ppr prag <+> ppr mark
 
@@ -608,9 +593,9 @@ instance Outputable HsImplBang where
     ppr HsStrict                = ptext (sLit "StrictNotUnpacked")
 
 instance Outputable SrcStrictness where
-    ppr SrcLazy         = char '~'
-    ppr SrcStrict       = char '!'
-    ppr NoSrcStrictness = empty
+    ppr SrcLazy     = char '~'
+    ppr SrcStrict   = char '!'
+    ppr NoSrcStrict = empty
 
 instance Outputable SrcUnpackedness where
     ppr SrcUnpack   = ptext (sLit "{-# UNPACK #-}")
@@ -659,8 +644,7 @@ isMarkedStrict _               = True   -- All others are strict
 -- | Build a new data constructor
 mkDataCon :: Name
           -> Bool           -- ^ Is the constructor declared infix?
-          -> [HsBang]       -- ^ Strictness/unpack annotations, from user; or,
-                            -- for imported DataCons, from the interface file
+          -> [HsSrcBang]       -- ^ Strictness/unpack annotations, from user
           -> [FieldLabel]   -- ^ Field labels for the constructor,
                             -- if it is a record, otherwise empty
           -> [TyVar]        -- ^ Universally quantified type variables
@@ -834,7 +818,7 @@ dataConFieldType con label
 -- DataCons, from the interface file
 -- The list is in one-to-one correspondence with the arity of the 'DataCon'
 
-dataConSrcBangs :: DataCon -> [HsBang]
+dataConSrcBangs :: DataCon -> [HsSrcBang]
 dataConSrcBangs = dcSrcBangs
 
 -- | Source-level arity of the data constructor

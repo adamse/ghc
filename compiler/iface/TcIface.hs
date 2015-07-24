@@ -515,7 +515,8 @@ tcIfaceDataCons tycon_name tycon tc_tyvars if_cons
                          ifConExTvs = ex_tvs,
                          ifConOcc = occ, ifConCtxt = ctxt, ifConEqSpec = spec,
                          ifConArgTys = args, ifConFields = field_lbls,
-                         ifConStricts = if_stricts})
+                         ifConStricts = if_stricts,
+                         ifConSrcStricts = if_src_stricts})
      = -- Universally-quantified tyvars are shared with
        -- parent TyCon, and are alrady in scope
        bindIfaceTyVars ex_tvs    $ \ ex_tyvars -> do
@@ -543,9 +544,10 @@ tcIfaceDataCons tycon_name tycon tc_tyvars if_cons
 
         ; con <- buildDataCon (pprPanic "tcIfaceDataCons: FamInstEnvs" (ppr name))
                        name is_infix
-                       stricts -- Pass the HsImplBangs (i.e. final decisions)
-                               -- to buildDataCon; it'll use these to guide
-                               -- the construction of a worker
+                       (map src_strict if_src_stricts)
+                       (Just stricts) -- Pass the HsImplBangs (i.e. final decisions)
+                                      -- to buildDataCon; it'll use these to guide
+                                      -- the construction of a worker
                        lbl_names
                        tc_tyvars ex_tyvars
                        eq_spec theta
@@ -554,12 +556,23 @@ tcIfaceDataCons tycon_name tycon tc_tyvars if_cons
         ; return con }
     mk_doc con_name = ptext (sLit "Constructor") <+> ppr con_name
 
-    tc_strict :: IfaceBang -> IfL HsBang
-    tc_strict IfNoBang = return (ImplBang HsLazy)
-    tc_strict IfStrict = return (ImplBang HsStrict)
-    tc_strict IfUnpack = return (ImplBang (HsUnpack Nothing))
+    tc_strict :: IfaceBang -> IfL HsImplBang
+    tc_strict IfNoBang = return (HsLazy)
+    tc_strict IfStrict = return (HsStrict)
+    tc_strict IfUnpack = return (HsUnpack Nothing)
     tc_strict (IfUnpackCo if_co) = do { co <- tcIfaceCo if_co
-                                      ; return (ImplBang (HsUnpack (Just co))) }
+                                      ; return (HsUnpack (Just co)) }
+
+    src_strict :: IfaceSrcBang -> HsSrcBang
+    src_strict (IfSrcBang ifunpk ifbang) = HsSrcBang Nothing unpk bang
+      where unpk = case ifunpk of
+                     IfSrcUnpack   -> SrcUnpack
+                     IfSrcNoUnpack -> SrcNoUnpack
+                     IfNoSrcUnpack -> NoSrcUnpack
+            bang = case ifbang of
+                     IfSrcStrict   -> SrcStrict
+                     IfSrcLazy     -> SrcLazy
+                     IfNoSrcStrict -> NoSrcStrict
 
 tcIfaceEqSpec :: IfaceEqSpec -> IfL [(TyVar, Type)]
 tcIfaceEqSpec spec

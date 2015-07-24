@@ -79,7 +79,8 @@ buildPDataDataCon orig_name vect_tc repr_tc repr
       fam_envs  <- readGEnv global_fam_inst_env
       liftDs $ buildDataCon fam_envs dc_name
                             False                  -- not infix
-                            (map (const (ImplBang HsLazy)) comp_tys)
+                            (map (const (HsSrcBang Nothing NoSrcUnpack NoSrcStrict)) comp_tys)
+                            (Just $ map (const HsLazy) comp_tys)
                             []                     -- no field labels
                             tvs
                             []                     -- no existentials
@@ -118,7 +119,8 @@ buildPDatasDataCon orig_name vect_tc repr_tc repr
       fam_envs <- readGEnv global_fam_inst_env
       liftDs $ buildDataCon fam_envs dc_name
                             False                  -- not infix
-                            (map (const (ImplBang HsLazy)) comp_tys)
+                            (map (const (HsSrcBang Nothing NoSrcUnpack NoSrcStrict)) comp_tys)
+                            (Just $ map (const HsLazy) comp_tys)
                             []                     -- no field labels
                             tvs
                             []                     -- no existentials

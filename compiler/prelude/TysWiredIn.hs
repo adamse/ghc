@@ -285,7 +285,7 @@ pcDataConWithFixity' declared_infix dc_name wrk_key tyvars arg_tys tycon
   = data_con
   where
     data_con = mkDataCon dc_name declared_infix
-                (map (const (ImplBang HsLazy)) arg_tys)
+                (map (const (HsSrcBang Nothing NoSrcUnpack NoSrcStrict)) arg_tys)
                 []      -- No labelled fields
                 tyvars
                 []      -- No existential type variables

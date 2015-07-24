@@ -15,7 +15,9 @@ module IfaceSyn (
         IfaceIdInfo(..), IfaceIdDetails(..), IfaceUnfolding(..),
         IfaceInfoItem(..), IfaceRule(..), IfaceAnnotation(..), IfaceAnnTarget,
         IfaceClsInst(..), IfaceFamInst(..), IfaceTickish(..),
-        IfaceBang(..), IfaceAxBranch(..),
+        IfaceBang(..),
+        IfaceSrcBang(..), IfaceSrcUnpackedness(..), IfaceSrcStrictness(..),
+        IfaceAxBranch(..),
         IfaceTyConParent(..),
 
         -- Misc
@@ -201,14 +203,23 @@ data IfaceConDecl
         ifConCtxt    :: IfaceContext,           -- Non-stupid context
         ifConArgTys  :: [IfaceType],            -- Arg types
         ifConFields  :: [IfaceTopBndr],         -- ...ditto... (field labels)
-        ifConStricts :: [IfaceBang]}            -- Empty (meaning all lazy),
+        ifConStricts :: [IfaceBang],            -- Empty (meaning all lazy),
                                                 -- or 1-1 corresp with arg tys
+        ifConSrcStricts :: [IfaceSrcBang]}      -- empty meaning no src stricts
 
 type IfaceEqSpec = [(IfLclName,IfaceType)]
 
-data IfaceBang  -- This corresponds to an HsImplBang; that is, the final
-                -- implementation decision about the data constructor arg
+-- | This corresponds to an HsImplBang; that is, the final
+-- implementation decision about the data constructor arg
+data IfaceBang
   = IfNoBang | IfStrict | IfUnpack | IfUnpackCo IfaceCoercion
+
+-- | This corresponds to HsSrcBang
+data IfaceSrcBang
+  = IfSrcBang IfaceSrcUnpackedness IfaceSrcStrictness
+
+data IfaceSrcUnpackedness = IfSrcNoUnpack | IfSrcUnpack | IfNoSrcUnpack
+data IfaceSrcStrictness = IfSrcLazy | IfSrcStrict | IfNoSrcStrict
 
 data IfaceClsInst
   = IfaceClsInst { ifInstCls  :: IfExtName,                -- See comments with
@@ -1506,7 +1517,7 @@ instance Binary IfaceConDecls where
             _ -> liftM IfNewTyCon $ get bh
 
 instance Binary IfaceConDecl where
-    put_ bh (IfCon a1 a2 a3 a4 a5 a6 a7 a8 a9) = do
+    put_ bh (IfCon a1 a2 a3 a4 a5 a6 a7 a8 a9 a10) = do
         put_ bh a1
         put_ bh a2
         put_ bh a3
@@ -1516,6 +1527,7 @@ instance Binary IfaceConDecl where
         put_ bh a7
         put_ bh a8
         put_ bh a9
+        put_ bh a10
     get bh = do
         a1 <- get bh
         a2 <- get bh
@@ -1526,7 +1538,8 @@ instance Binary IfaceConDecl where
         a7 <- get bh
         a8 <- get bh
         a9 <- get bh
-        return (IfCon a1 a2 a3 a4 a5 a6 a7 a8 a9)
+        a10 <- get bh
+        return (IfCon a1 a2 a3 a4 a5 a6 a7 a8 a9 a10)
 
 instance Binary IfaceBang where
     put_ bh IfNoBang        = putByte bh 0
@@ -1541,6 +1554,40 @@ instance Binary IfaceBang where
               1 -> do return IfStrict
               2 -> do return IfUnpack
               _ -> do { a <- get bh; return (IfUnpackCo a) }
+
+instance Binary IfaceSrcBang where
+    put_ bh (IfSrcBang a1 a2) =
+      do put_ bh a1
+         put_ bh a2
+
+    get bh =
+      do a1 <- get bh
+         a2 <- get bh
+         return (IfSrcBang a1 a2)
+
+instance Binary IfaceSrcUnpackedness where
+    put_ bh IfSrcNoUnpack = putByte bh 0
+    put_ bh IfSrcUnpack   = putByte bh 1
+    put_ bh IfNoSrcUnpack = putByte bh 2
+
+    get bh =
+      do h <- getByte bh
+         case h of
+           0 -> return IfSrcNoUnpack
+           1 -> return IfSrcUnpack
+           _ -> return IfNoSrcUnpack
+
+instance Binary IfaceSrcStrictness where
+    put_ bh IfSrcLazy     = putByte bh 0
+    put_ bh IfSrcStrict   = putByte bh 1
+    put_ bh IfNoSrcStrict = putByte bh 2
+
+    get bh =
+      do h <- getByte bh
+         case h of
+           0 -> return IfSrcLazy
+           1 -> return IfSrcLazy
+           _ -> return IfNoSrcStrict
 
 instance Binary IfaceClsInst where
     put_ bh (IfaceClsInst cls tys dfun flag orph) = do
@@ -1609,7 +1656,7 @@ instance Binary IfaceIdDetails where
         case h of
             0 -> return IfVanillaId
             1 -> do { a <- get bh; b <- get bh; return (IfRecSelId a b) }
-            _ -> return IfDFunId 
+            _ -> return IfDFunId
 
 instance Binary IfaceIdInfo where
     put_ bh NoInfo      = putByte bh 0

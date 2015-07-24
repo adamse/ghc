@@ -465,8 +465,8 @@ newtype DataConBoxer = DCB ([Type] -> [Var] -> UniqSM ([Var], [CoreBind]))
                        -- Bind these src-level vars, returning the
                        -- rep-level vars to bind in the pattern
 
-mkDataConRep :: DynFlags -> FamInstEnvs -> Name -> DataCon -> UniqSM DataConRep
-mkDataConRep dflags fam_envs wrap_name data_con
+mkDataConRep :: DynFlags -> FamInstEnvs -> Name -> Maybe [HsImplBang] -> DataCon -> UniqSM DataConRep
+mkDataConRep dflags fam_envs wrap_name mb_bangs data_con
   | not wrapper_reqd
   = return NoDataConRep
 
@@ -520,7 +520,8 @@ mkDataConRep dflags fam_envs wrap_name data_con
     wrap_ty      = dataConUserType data_con
     ev_tys       = eqSpecPreds eq_spec ++ theta
     all_arg_tys  = ev_tys                         ++ orig_arg_tys
-    orig_bangs   = map mk_pred_strict_mark ev_tys ++ dataConSrcBangs data_con
+    ev_tys_bangs = map mk_pred_strict_mark ev_tys
+    orig_bangs   = dataConSrcBangs data_con
 
     wrap_arg_tys = theta ++ orig_arg_tys
     wrap_arity   = length wrap_arg_tys
@@ -529,7 +530,14 @@ mkDataConRep dflags fam_envs wrap_name data_con
              -- wrapper
 
     (wrap_bangs, rep_tys_w_strs, wrappers)
-       = unzip3 (zipWith (dataConArgRep dflags fam_envs) all_arg_tys orig_bangs)
+      = unzip3 (zipWith dataConArgRep all_arg_tys ev_tys_bangs ++
+                case mb_bangs of
+                  Nothing -> zipWith (dataConArgRepSrc dflags fam_envs)
+                                     (dropList ev_tys all_arg_tys) orig_bangs
+                  Just bangs -> zipWith dataConArgRep (dropList ev_tys all_arg_tys) bangs)
+
+    -- (wrap_bangs, rep_tys_w_strs, wrappers)
+    --    = unzip3 (zipWith (dataConArgRep dflags fam_envs) all_arg_tys orig_bangs)
     (unboxers, boxers) = unzip wrappers
     (rep_tys, rep_strs) = unzip (concat rep_tys_w_strs)
 
@@ -577,35 +585,29 @@ newLocal :: Type -> UniqSM Var
 newLocal ty = do { uniq <- getUniqueM
                  ; return (mkSysLocal (fsLit "dt") uniq ty) }
 
--------------------------
-dataConArgRep
+-- | Unpack/Strictness decisions from source module
+dataConArgRepSrc
    :: DynFlags
    -> FamInstEnvs
    -> Type
-   -> HsBang -- For DataCons defined in this module, this is the
-             --    bang/unpack annotation that the programmer wrote
-             -- For DataCons imported from an interface file, this
-             --    is the HsImplBang implementation decision taken
-             --    by the compiler in the defining module; just follow
-             --    it slavishly, so that we make the same decision as
-             --    in the defining module
+   -> HsSrcBang
    -> ( HsImplBang                 -- Implementation decision about unpack strategy
       , [(Type, StrictnessMark)]   -- Rep types
       , (Unboxer, Boxer) )
 
-dataConArgRep dflags fam_envs arg_ty
-              (SrcBang (HsSrcBang ann unpk NoSrcStrictness))
+dataConArgRepSrc dflags fam_envs arg_ty
+              (HsSrcBang ann unpk NoSrcStrict)
   | xopt Opt_StrictData dflags -- StrictData => strict field
-  = dataConArgRep dflags fam_envs arg_ty
-                  (SrcBang (HsSrcBang ann unpk SrcStrict))
+  = dataConArgRepSrc dflags fam_envs arg_ty
+                  (HsSrcBang ann unpk SrcStrict)
   | otherwise -- no StrictData => lazy field
   = (HsLazy, [(arg_ty, NotMarkedStrict)], (unitUnboxer, unitBoxer))
 
-dataConArgRep _ _ arg_ty (SrcBang (HsSrcBang _ _ SrcLazy))
+dataConArgRepSrc _ _ arg_ty (HsSrcBang _ _ SrcLazy)
   = (HsLazy, [(arg_ty, NotMarkedStrict)], (unitUnboxer, unitBoxer))
 
-dataConArgRep dflags fam_envs arg_ty
-    (SrcBang (HsSrcBang _ unpk_prag SrcStrict))
+dataConArgRepSrc dflags fam_envs arg_ty
+    (HsSrcBang _ unpk_prag SrcStrict)
   | not (gopt Opt_OmitInterfacePragmas dflags) -- Don't unpack if -fomit-iface-pragmas
           -- Don't unpack if we aren't optimising; rather arbitrarily,
           -- we use -fomit-iface-pragmas as the indication
@@ -627,17 +629,26 @@ dataConArgRep dflags fam_envs arg_ty
   | otherwise -- Record the strict-but-no-unpack decision
   = strict_but_not_unpacked arg_ty
 
-dataConArgRep _ _ arg_ty (ImplBang HsLazy)
+
+-- | Unpack/Strictness decisions from imported module
+dataConArgRep
+  :: Type
+  -> HsImplBang
+  -> (HsImplBang
+     ,[(Type,StrictnessMark)] -- Rep types
+     ,(Unboxer,Boxer))
+
+dataConArgRep arg_ty HsLazy
   = (HsLazy, [(arg_ty, NotMarkedStrict)], (unitUnboxer, unitBoxer))
 
-dataConArgRep _ _ arg_ty (ImplBang HsStrict)
+dataConArgRep arg_ty HsStrict
   = strict_but_not_unpacked arg_ty
 
-dataConArgRep _ _ arg_ty (ImplBang (HsUnpack Nothing))
+dataConArgRep arg_ty (HsUnpack Nothing)
   | (rep_tys, wrappers) <- dataConArgUnpack arg_ty
   = (HsUnpack Nothing, rep_tys, wrappers)
 
-dataConArgRep _ _ _ (ImplBang (HsUnpack (Just co)))
+dataConArgRep _ (HsUnpack (Just co))
   | let co_rep_ty = pSnd (coercionKind co)
   , (rep_tys, wrappers) <- dataConArgUnpack co_rep_ty
   = (HsUnpack (Just co), rep_tys, wrapCo co co_rep_ty wrappers)
@@ -737,19 +748,19 @@ isUnpackableType dflags fam_envs ty
          -- NB: dataConSrcBangs gives the *user* request;
          -- We'd get a black hole if we used dataConImplBangs
 
-    attempt_unpack (ImplBang (HsUnpack {}))
-      = True
-    attempt_unpack (ImplBang HsStrict)
-      = False
-    attempt_unpack (ImplBang HsLazy)
-      = False
-    attempt_unpack (SrcBang (HsSrcBang _ SrcUnpack NoSrcStrictness))
+    -- attempt_unpack (ImplBang (HsUnpack {}))
+    --   = True
+    -- attempt_unpack (ImplBang HsStrict)
+    --   = False
+    -- attempt_unpack (ImplBang HsLazy)
+    --   = False
+    attempt_unpack (HsSrcBang _ SrcUnpack NoSrcStrict)
       = xopt Opt_StrictData dflags
-    attempt_unpack (SrcBang (HsSrcBang _ SrcUnpack SrcStrict))
+    attempt_unpack (HsSrcBang _ SrcUnpack SrcStrict)
       = True
-    attempt_unpack (SrcBang (HsSrcBang _  NoSrcUnpack SrcStrict))
+    attempt_unpack (HsSrcBang _  NoSrcUnpack SrcStrict)
       = True  -- Be conservative
-    attempt_unpack (SrcBang (HsSrcBang _  NoSrcUnpack NoSrcStrictness))
+    attempt_unpack (HsSrcBang _  NoSrcUnpack NoSrcStrict)
       = xopt Opt_StrictData dflags -- Be conservative
     attempt_unpack _ = False
 
@@ -816,11 +827,11 @@ heavy lifting.  This one line makes every GADT take a word less
 space for each equality predicate, so it's pretty important!
 -}
 
-mk_pred_strict_mark :: PredType -> HsBang
+mk_pred_strict_mark :: PredType -> HsImplBang
 mk_pred_strict_mark pred
-  | isEqPred pred = ImplBang (HsUnpack Nothing)
+  | isEqPred pred = HsUnpack Nothing
   -- Note [Unpack equality predicates]
-  | otherwise     = ImplBang HsLazy
+  | otherwise     = HsLazy
 
 {-
 ************************************************************************
