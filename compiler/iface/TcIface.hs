@@ -543,18 +543,18 @@ tcIfaceDataCons tycon_name tycon tc_tyvars if_cons
                                 (substTyVars (mkTopTvSubst eq_spec) tc_tyvars)
 
         ; con <- buildDataCon (pprPanic "tcIfaceDataCons: FamInstEnvs" (ppr name))
-                       name is_infix
-                       (map src_strict if_src_stricts)
-                       (Just stricts)
-                         -- Pass the HsImplBangs (i.e. final
-                         -- decisions) to buildDataCon; it'll use
-                         -- these to guide the construction of a
-                         -- worker.
-                         -- See Note [Bangs on imported data constructors] in MkId
-                       lbl_names
-                       tc_tyvars ex_tyvars
-                       eq_spec theta
-                       arg_tys orig_res_ty tycon
+                   name is_infix
+                   (map src_strict if_src_stricts)
+                   (Just stricts)
+                     -- Pass the HsImplBangs (i.e. final
+                     -- decisions) to buildDataCon; it'll use
+                     -- these to guide the construction of a
+                     -- worker.
+                     -- See Note [Bangs on imported data constructors] in MkId
+                   lbl_names
+                   tc_tyvars ex_tyvars
+                   eq_spec theta
+                   arg_tys orig_res_ty tycon
         ; traceIf (text "Done interface-file tc_con_decl" <+> ppr name)
         ; return con }
     mk_doc con_name = ptext (sLit "Constructor") <+> ppr con_name
