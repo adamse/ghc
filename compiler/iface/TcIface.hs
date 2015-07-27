@@ -546,9 +546,11 @@ tcIfaceDataCons tycon_name tycon tc_tyvars if_cons
                        name is_infix
                        (map src_strict if_src_stricts)
                        (Just stricts)
-                         -- Pass the HsImplBangs (i.e. final decisions)
-                         -- to buildDataCon; it'll use these to guide
-                         -- the construction of a worker
+                         -- Pass the HsImplBangs (i.e. final
+                         -- decisions) to buildDataCon; it'll use
+                         -- these to guide the construction of a
+                         -- worker.
+                         -- See Note [Bangs on imported data constructors] in MkId
                        lbl_names
                        tc_tyvars ex_tyvars
                        eq_spec theta
@@ -565,15 +567,7 @@ tcIfaceDataCons tycon_name tycon tc_tyvars if_cons
                                       ; return (HsUnpack (Just co)) }
 
     src_strict :: IfaceSrcBang -> HsSrcBang
-    src_strict (IfSrcBang ifunpk ifbang) = HsSrcBang Nothing unpk bang
-      where unpk = case ifunpk of
-                     IfSrcUnpack   -> SrcUnpack
-                     IfSrcNoUnpack -> SrcNoUnpack
-                     IfNoSrcUnpack -> NoSrcUnpack
-            bang = case ifbang of
-                     IfSrcStrict   -> SrcStrict
-                     IfSrcLazy     -> SrcLazy
-                     IfNoSrcStrict -> NoSrcStrict
+    src_strict (IfSrcBang unpk bang) = HsSrcBang Nothing unpk bang
 
 tcIfaceEqSpec :: IfaceEqSpec -> IfL [(TyVar, Type)]
 tcIfaceEqSpec spec

@@ -1737,15 +1737,7 @@ toIfaceBang env (HsUnpack (Just co)) = IfUnpackCo (toIfaceCoercion (tidyCo env c
 toIfaceBang _   HsStrict             = IfStrict
 
 toIfaceSrcBang :: HsSrcBang -> IfaceSrcBang
-toIfaceSrcBang (HsSrcBang _ unpk bang) = IfSrcBang ifunpk ifbang
-  where ifunpk = case unpk of
-                   SrcUnpack   -> IfSrcUnpack
-                   SrcNoUnpack -> IfSrcNoUnpack
-                   NoSrcUnpack -> IfNoSrcUnpack
-        ifbang = case bang of
-                   SrcStrict   -> IfSrcStrict
-                   SrcLazy     -> IfSrcLazy
-                   NoSrcStrict -> IfNoSrcStrict
+toIfaceSrcBang (HsSrcBang _ unpk bang) = IfSrcBang unpk bang
 
 classToIfaceDecl :: TidyEnv -> Class -> (TidyEnv, IfaceDecl)
 classToIfaceDecl env clas

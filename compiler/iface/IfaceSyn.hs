@@ -16,7 +16,7 @@ module IfaceSyn (
         IfaceInfoItem(..), IfaceRule(..), IfaceAnnotation(..), IfaceAnnTarget,
         IfaceClsInst(..), IfaceFamInst(..), IfaceTickish(..),
         IfaceBang(..),
-        IfaceSrcBang(..), IfaceSrcUnpackedness(..), IfaceSrcStrictness(..),
+        IfaceSrcBang(..), SrcUnpackedness(..), SrcStrictness(..),
         IfaceAxBranch(..),
         IfaceTyConParent(..),
 
@@ -59,6 +59,7 @@ import TyCon (Role (..))
 import StaticFlags (opt_PprStyle_Debug)
 import Util( filterOut )
 import InstEnv
+import DataCon (SrcStrictness(..), SrcUnpackedness(..))
 
 import Control.Monad
 import System.IO.Unsafe
@@ -198,14 +199,16 @@ data IfaceConDecl
         -- but it's not so easy for the original TyCon/DataCon
         -- So this guarantee holds for IfaceConDecl, but *not* for DataCon
 
-        ifConExTvs   :: [IfaceTvBndr],          -- Existential tyvars
-        ifConEqSpec  :: IfaceEqSpec,            -- Equality constraints
-        ifConCtxt    :: IfaceContext,           -- Non-stupid context
-        ifConArgTys  :: [IfaceType],            -- Arg types
-        ifConFields  :: [IfaceTopBndr],         -- ...ditto... (field labels)
-        ifConStricts :: [IfaceBang],            -- Empty (meaning all lazy),
-                                                -- or 1-1 corresp with arg tys
-        ifConSrcStricts :: [IfaceSrcBang]}      -- empty meaning no src stricts
+        ifConExTvs   :: [IfaceTvBndr],      -- Existential tyvars
+        ifConEqSpec  :: IfaceEqSpec,        -- Equality constraints
+        ifConCtxt    :: IfaceContext,       -- Non-stupid context
+        ifConArgTys  :: [IfaceType],        -- Arg types
+        ifConFields  :: [IfaceTopBndr],     -- ...ditto... (field labels)
+        ifConStricts :: [IfaceBang],
+          -- Empty (meaning all lazy),
+          -- or 1-1 corresp with arg tys
+          -- See Note [Bangs on imported data constructors] in MkId
+        ifConSrcStricts :: [IfaceSrcBang] } -- empty meaning no src stricts
 
 type IfaceEqSpec = [(IfLclName,IfaceType)]
 
@@ -216,10 +219,7 @@ data IfaceBang
 
 -- | This corresponds to HsSrcBang
 data IfaceSrcBang
-  = IfSrcBang IfaceSrcUnpackedness IfaceSrcStrictness
-
-data IfaceSrcUnpackedness = IfSrcNoUnpack | IfSrcUnpack | IfNoSrcUnpack
-data IfaceSrcStrictness = IfSrcLazy | IfSrcStrict | IfNoSrcStrict
+  = IfSrcBang SrcUnpackedness SrcStrictness
 
 data IfaceClsInst
   = IfaceClsInst { ifInstCls  :: IfExtName,                -- See comments with
@@ -1564,30 +1564,6 @@ instance Binary IfaceSrcBang where
       do a1 <- get bh
          a2 <- get bh
          return (IfSrcBang a1 a2)
-
-instance Binary IfaceSrcUnpackedness where
-    put_ bh IfSrcNoUnpack = putByte bh 0
-    put_ bh IfSrcUnpack   = putByte bh 1
-    put_ bh IfNoSrcUnpack = putByte bh 2
-
-    get bh =
-      do h <- getByte bh
-         case h of
-           0 -> return IfSrcNoUnpack
-           1 -> return IfSrcUnpack
-           _ -> return IfNoSrcUnpack
-
-instance Binary IfaceSrcStrictness where
-    put_ bh IfSrcLazy     = putByte bh 0
-    put_ bh IfSrcStrict   = putByte bh 1
-    put_ bh IfNoSrcStrict = putByte bh 2
-
-    get bh =
-      do h <- getByte bh
-         case h of
-           0 -> return IfSrcLazy
-           1 -> return IfSrcLazy
-           _ -> return IfNoSrcStrict
 
 instance Binary IfaceClsInst where
     put_ bh (IfaceClsInst cls tys dfun flag orph) = do

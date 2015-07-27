@@ -131,14 +131,15 @@ buildDataCon :: FamInstEnvs
             -> Name -> Bool
             -> [HsSrcBang]
             -> Maybe [HsImplBang]
-            -> [Name]                   -- Field labels
-            -> [TyVar] -> [TyVar]       -- Univ and ext
-            -> [(TyVar,Type)]           -- Equality spec
-            -> ThetaType                -- Does not include the "stupid theta"
-                                        -- or the GADT equalities
-            -> [Type] -> Type           -- Argument and result types
-            -> TyCon                    -- Rep tycon
-            -> TcRnIf m n DataCon
+                -- See Note [Bangs on imported data constructors] in MkId
+           -> [Name]                   -- Field labels
+           -> [TyVar] -> [TyVar]       -- Univ and ext
+           -> [(TyVar,Type)]           -- Equality spec
+           -> ThetaType                -- Does not include the "stupid theta"
+                                       -- or the GADT equalities
+           -> [Type] -> Type           -- Argument and result types
+           -> TyCon                    -- Rep tycon
+           -> TcRnIf m n DataCon
 -- A wrapper for DataCon.mkDataCon that
 --   a) makes the worker Id
 --   b) makes the wrapper Id if necessary, including

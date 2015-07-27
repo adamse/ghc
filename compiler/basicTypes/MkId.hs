@@ -585,6 +585,24 @@ mkDataConRep dflags fam_envs wrap_name mb_bangs data_con
            ; expr <- mk_rep_app prs (mkVarApps con_app rep_ids)
            ; return (unbox_fn expr) }
 
+{-
+Note [Bangs on imported data constructors]
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+We pass Maybe [HsImplBang] to mkDataConRep to make use of HsImplBangs
+from imported modules.
+
+- Nothing <=> use HsSrcBangs
+- Just bangs <=> use HsImplBangs
+
+For imported types we can't work it all out from the HsSrcBangs,
+because we want to be very sure to follow what the original module
+(where the data type was declared) decided, and that depends on what
+flags were enabled when it was compiled. So we record the decisions in
+the interface file.
+
+-}
+
 -------------------------
 newLocal :: Type -> UniqSM Var
 newLocal ty = do { uniq <- getUniqueM
@@ -748,12 +766,6 @@ isUnpackableType dflags fam_envs ty
          -- NB: dataConSrcBangs gives the *user* request;
          -- We'd get a black hole if we used dataConImplBangs
 
-    -- attempt_unpack (ImplBang (HsUnpack {}))
-    --   = True
-    -- attempt_unpack (ImplBang HsStrict)
-    --   = False
-    -- attempt_unpack (ImplBang HsLazy)
-    --   = False
     attempt_unpack (HsSrcBang _ SrcUnpack NoSrcStrict)
       = xopt Opt_StrictData dflags
     attempt_unpack (HsSrcBang _ SrcUnpack SrcStrict)
