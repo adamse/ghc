@@ -545,9 +545,10 @@ tcIfaceDataCons tycon_name tycon tc_tyvars if_cons
         ; con <- buildDataCon (pprPanic "tcIfaceDataCons: FamInstEnvs" (ppr name))
                        name is_infix
                        (map src_strict if_src_stricts)
-                       (Just stricts) -- Pass the HsImplBangs (i.e. final decisions)
-                                      -- to buildDataCon; it'll use these to guide
-                                      -- the construction of a worker
+                       (Just stricts)
+                         -- Pass the HsImplBangs (i.e. final decisions)
+                         -- to buildDataCon; it'll use these to guide
+                         -- the construction of a worker
                        lbl_names
                        tc_tyvars ex_tyvars
                        eq_spec theta

@@ -465,7 +465,12 @@ newtype DataConBoxer = DCB ([Type] -> [Var] -> UniqSM ([Var], [CoreBind]))
                        -- Bind these src-level vars, returning the
                        -- rep-level vars to bind in the pattern
 
-mkDataConRep :: DynFlags -> FamInstEnvs -> Name -> Maybe [HsImplBang] -> DataCon -> UniqSM DataConRep
+mkDataConRep :: DynFlags
+             -> FamInstEnvs
+             -> Name
+             -> Maybe [HsImplBang]
+             -> DataCon
+             -> UniqSM DataConRep
 mkDataConRep dflags fam_envs wrap_name mb_bangs data_con
   | not wrapper_reqd
   = return NoDataConRep

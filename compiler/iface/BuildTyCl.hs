@@ -274,8 +274,8 @@ buildClass tycon_name tvs roles sc_theta fds at_items sig_stuff mindef tc_isrec
         ; dict_con <- buildDataCon (panic "buildClass: FamInstEnvs")
                                    datacon_name
                                    False        -- Not declared infix
-                                   (map (const (HsSrcBang Nothing NoSrcUnpack NoSrcStrict)) args)
-                                   (Just (map (const (HsLazy)) args))
+                                   (map (const no_bang) args)
+                                   (Just (map (const HsLazy) args))
                                    [{- No fields -}]
                                    tvs [{- no existentials -}]
                                    [{- No GADT equalities -}]
@@ -311,6 +311,8 @@ buildClass tycon_name tvs roles sc_theta fds at_items sig_stuff mindef tc_isrec
         ; traceIf (text "buildClass" <+> ppr tycon)
         ; return result }
   where
+    no_bang = HsSrcBang Nothing NoSrcUnpack NoSrcStrict
+
     mk_op_item :: Class -> TcMethInfo -> TcRnIf n m ClassOpItem
     mk_op_item rec_clas (op_name, dm_spec, _)
       = do { dm_info <- case dm_spec of
