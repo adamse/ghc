@@ -529,15 +529,15 @@ mkDataConRep dflags fam_envs wrap_name mb_bangs data_con
              -- Because we are going to apply the eq_spec args manually in the
              -- wrapper
 
-    (wrap_bangs, rep_tys_w_strs, wrappers)
-      = unzip3 (zipWith dataConArgRep all_arg_tys ev_tys_bangs ++
-                case mb_bangs of
-                  Nothing -> zipWith (dataConArgRepSrc dflags fam_envs)
-                                     (dropList ev_tys all_arg_tys) orig_bangs
-                  Just bangs -> zipWith dataConArgRep (dropList ev_tys all_arg_tys) bangs)
+    wrap_bangs =
+      case mb_bangs of
+        Nothing    -> zipWith (dataConSrcToImplBang dflags fam_envs)
+                              all_arg_tys orig_bangs
+        Just bangs -> bangs
 
-    -- (wrap_bangs, rep_tys_w_strs, wrappers)
-    --    = unzip3 (zipWith (dataConArgRep dflags fam_envs) all_arg_tys orig_bangs)
+    (rep_tys_w_strs, wrappers)
+      = unzip (zipWith dataConArgRep all_arg_tys (ev_tys_bangs ++ wrap_bangs))
+
     (unboxers, boxers) = unzip wrappers
     (rep_tys, rep_strs) = unzip (concat rep_tys_w_strs)
 
@@ -586,27 +586,25 @@ newLocal ty = do { uniq <- getUniqueM
                  ; return (mkSysLocal (fsLit "dt") uniq ty) }
 
 -- | Unpack/Strictness decisions from source module
-dataConArgRepSrc
+dataConSrcToImplBang
    :: DynFlags
    -> FamInstEnvs
    -> Type
    -> HsSrcBang
-   -> ( HsImplBang                 -- Implementation decision about unpack strategy
-      , [(Type, StrictnessMark)]   -- Rep types
-      , (Unboxer, Boxer) )
+   -> HsImplBang
 
-dataConArgRepSrc dflags fam_envs arg_ty
+dataConSrcToImplBang dflags fam_envs arg_ty
               (HsSrcBang ann unpk NoSrcStrict)
   | xopt Opt_StrictData dflags -- StrictData => strict field
-  = dataConArgRepSrc dflags fam_envs arg_ty
+  = dataConSrcToImplBang dflags fam_envs arg_ty
                   (HsSrcBang ann unpk SrcStrict)
   | otherwise -- no StrictData => lazy field
-  = (HsLazy, [(arg_ty, NotMarkedStrict)], (unitUnboxer, unitBoxer))
+  = HsLazy
 
-dataConArgRepSrc _ _ arg_ty (HsSrcBang _ _ SrcLazy)
-  = (HsLazy, [(arg_ty, NotMarkedStrict)], (unitUnboxer, unitBoxer))
+dataConSrcToImplBang _ _ _ (HsSrcBang _ _ SrcLazy)
+  = HsLazy
 
-dataConArgRepSrc dflags fam_envs arg_ty
+dataConSrcToImplBang dflags fam_envs arg_ty
     (HsSrcBang _ unpk_prag SrcStrict)
   | not (gopt Opt_OmitInterfacePragmas dflags) -- Don't unpack if -fomit-iface-pragmas
           -- Don't unpack if we aren't optimising; rather arbitrarily,
@@ -615,7 +613,7 @@ dataConArgRepSrc dflags fam_envs arg_ty
                      -- Unwrap type families and newtypes
         arg_ty' = case mb_co of { Just (_,ty) -> ty; Nothing -> arg_ty }
   , isUnpackableType dflags fam_envs arg_ty'
-  , (rep_tys, wrappers) <- dataConArgUnpack arg_ty'
+  , (rep_tys, _) <- dataConArgUnpack arg_ty'
   , case unpk_prag of
       NoSrcUnpack ->
         gopt Opt_UnboxStrictFields dflags
@@ -623,39 +621,36 @@ dataConArgRepSrc dflags fam_envs arg_ty
                 && length rep_tys <= 1) -- See Note [Unpack one-wide fields]
       srcUnpack -> isSrcUnpacked srcUnpack
   = case mb_co of
-      Nothing          -> (HsUnpack Nothing,   rep_tys, wrappers)
-      Just (co,rep_ty) -> (HsUnpack (Just co), rep_tys, wrapCo co rep_ty wrappers)
+      Nothing     -> HsUnpack Nothing
+      Just (co,_) -> HsUnpack (Just co)
 
   | otherwise -- Record the strict-but-no-unpack decision
-  = strict_but_not_unpacked arg_ty
+  = HsStrict
 
 
--- | Unpack/Strictness decisions from imported module
+-- | Wrappers/Workser and representation following Unpack/Strictness
+-- decisions
 dataConArgRep
   :: Type
   -> HsImplBang
-  -> (HsImplBang
-     ,[(Type,StrictnessMark)] -- Rep types
+  -> ([(Type,StrictnessMark)] -- Rep types
      ,(Unboxer,Boxer))
 
 dataConArgRep arg_ty HsLazy
-  = (HsLazy, [(arg_ty, NotMarkedStrict)], (unitUnboxer, unitBoxer))
+  = ([(arg_ty, NotMarkedStrict)], (unitUnboxer, unitBoxer))
 
 dataConArgRep arg_ty HsStrict
-  = strict_but_not_unpacked arg_ty
+  = ([(arg_ty, MarkedStrict)], (seqUnboxer, unitBoxer))
 
 dataConArgRep arg_ty (HsUnpack Nothing)
   | (rep_tys, wrappers) <- dataConArgUnpack arg_ty
-  = (HsUnpack Nothing, rep_tys, wrappers)
+  = (rep_tys, wrappers)
 
 dataConArgRep _ (HsUnpack (Just co))
   | let co_rep_ty = pSnd (coercionKind co)
   , (rep_tys, wrappers) <- dataConArgUnpack co_rep_ty
-  = (HsUnpack (Just co), rep_tys, wrapCo co co_rep_ty wrappers)
+  = (rep_tys, wrapCo co co_rep_ty wrappers)
 
-strict_but_not_unpacked :: Type -> (HsImplBang, [(Type,StrictnessMark)], (Unboxer, Boxer))
-strict_but_not_unpacked arg_ty
-  = (HsStrict, [(arg_ty, MarkedStrict)], (seqUnboxer, unitBoxer))
 
 -------------------------
 wrapCo :: Coercion -> Type -> (Unboxer, Boxer) -> (Unboxer, Boxer)
