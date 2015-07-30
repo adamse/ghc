@@ -1735,8 +1735,8 @@ decideGeneralisationPlan dflags type_env bndr_names lbinds sig_fn
     bndr_set = mkNameSet bndr_names
     binds = map unLoc lbinds
 
-    strict_pat_binds = any isStrictHsBind binds
-       -- Strict patterns (top level bang or unboxed tuple) must not
+    unlifted_pat_binds = any isUnliftedHsBind binds
+       -- Unlifted patterns (unboxed tuple) must not
        -- be polymorphic, because we are going to force them
        -- See Trac #4498, #8762
 

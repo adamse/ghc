@@ -264,8 +264,8 @@ dictArity :: [Var] -> Arity
 dictArity dicts = count isId dicts
 
 {-
-[Desugaring AbsBinds]
-~~~~~~~~~~~~~~~~~~~~~
+Note [Desugaring AbsBinds]
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 In the general AbsBinds case we desugar the binding to this:
 
        tup a (d:Num a) = let fm = ...gm...

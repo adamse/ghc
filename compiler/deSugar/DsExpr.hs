@@ -109,8 +109,8 @@ ds_val_bind (NonRecursive, hsbinds) body
         -- ToDo: in some bizarre case it's conceivable that there
         --       could be dict binds in the 'binds'.  (See the notes
         --       below.  Then pattern-match would fail.  Urk.)
-    strictMatchOnly bind
-  = putSrcSpanDs loc (dsStrictBind bind body)
+    unliftedMatchOnly bind
+  = putSrcSpanDs loc (dsUnliftedBind bind body)
 
 -- Ordinary case for bindings; none should be unlifted
 ds_val_bind (_is_rec, binds) body
@@ -131,19 +131,19 @@ ds_val_bind (_is_rec, binds) body
         --    only have to deal with lifted ones now; so Rec is ok
 
 ------------------
-dsStrictBind :: HsBind Id -> CoreExpr -> DsM CoreExpr
-dsStrictBind (AbsBinds { abs_tvs = [], abs_ev_vars = []
+dsUnliftedBind :: HsBind Id -> CoreExpr -> DsM CoreExpr
+dsUnliftedBind (AbsBinds { abs_tvs = [], abs_ev_vars = []
                , abs_exports = exports
                , abs_ev_binds = ev_binds
                , abs_binds = lbinds }) body
   = do { let body1 = foldr bind_export body exports
              bind_export export b = bindNonRec (abe_poly export) (Var (abe_mono export)) b
-       ; body2 <- foldlBagM (\body lbind -> dsStrictBind (unLoc lbind) body)
+       ; body2 <- foldlBagM (\body lbind -> dsUnliftedBind (unLoc lbind) body)
                             body1 lbinds
        ; ds_binds <- dsTcEvBinds_s ev_binds
        ; return (mkCoreLets ds_binds body2) }
 
-dsStrictBind (FunBind { fun_id = L _ fun, fun_matches = matches, fun_co_fn = co_fn
+dsUnliftedBind (FunBind { fun_id = L _ fun, fun_matches = matches, fun_co_fn = co_fn
                       , fun_tick = tick, fun_infix = inf }) body
                 -- Can't be a bang pattern (that looks like a PatBind)
                 -- so must be simply unboxed
@@ -153,7 +153,7 @@ dsStrictBind (FunBind { fun_id = L _ fun, fun_matches = matches, fun_co_fn = co_
        ; let rhs' = mkOptTickBox tick rhs
        ; return (bindNonRec fun rhs' body) }
 
-dsStrictBind (PatBind {pat_lhs = pat, pat_rhs = grhss, pat_rhs_ty = ty }) body
+dsUnliftedBind (PatBind {pat_lhs = pat, pat_rhs = grhss, pat_rhs_ty = ty }) body
   =     -- let C x# y# = rhs in body
         -- ==> case rhs of C x# y# -> body
     do { rhs <- dsGuarded grhss ty
@@ -164,19 +164,19 @@ dsStrictBind (PatBind {pat_lhs = pat, pat_rhs = grhss, pat_rhs_ty = ty }) body
        ; result <- matchEquations PatBindRhs [var] [eqn] (exprType body)
        ; return (bindNonRec var rhs result) }
 
-dsStrictBind bind body = pprPanic "dsLet: unlifted" (ppr bind $$ ppr body)
+dsUnliftedBind bind body = pprPanic "dsLet: unlifted" (ppr bind $$ ppr body)
 
 ----------------------
-strictMatchOnly :: HsBind Id -> Bool
-strictMatchOnly (AbsBinds { abs_binds = lbinds })
-  = anyBag (strictMatchOnly . unLoc) lbinds
-strictMatchOnly (PatBind { pat_lhs = lpat, pat_rhs_ty = rhs_ty })
+unliftedMatchOnly :: HsBind Id -> Bool
+unliftedMatchOnly (AbsBinds { abs_binds = lbinds })
+  = anyBag (unliftedMatchOnly . unLoc) lbinds
+unliftedMatchOnly (PatBind { pat_lhs = lpat, pat_rhs_ty = rhs_ty })
   =  isUnLiftedType rhs_ty
-  || isStrictLPat lpat
+  || isUnliftedLPat lpat
   || any (isUnLiftedType . idType) (collectPatBinders lpat)
-strictMatchOnly (FunBind { fun_id = L _ id })
+unliftedMatchOnly (FunBind { fun_id = L _ id })
   = isUnLiftedType (idType id)
-strictMatchOnly _ = False -- I hope!  Checked immediately by caller in fact
+unliftedMatchOnly _ = False -- I hope!  Checked immediately by caller in fact
 
 {-
 ************************************************************************
