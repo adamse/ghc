@@ -39,6 +39,7 @@ import CoreSyn
 import CoreUtils
 import CoreFVs
 import MkCore
+import MkId (seqId)
 
 import DynFlags
 import CostCentre
@@ -111,13 +112,29 @@ ds_val_bind (NonRecursive, hsbinds) body
     unliftedMatchOnly bind
   = putSrcSpanDs loc (dsUnliftedBind bind body)
 
+-- ds_val_bind (is_rec, hsbinds) body
+--   | anyBag (is_banged . unLoc) hsbinds
+--   = do binds' <- mapBagM (dsBangedBind . unLoc) hsbinds
+--        let (forceVars, binds)
+--              = foldBag (\(ids, binds) (ids', binds') -> (ids ++ ids', binds ++ binds'))
+--                        id ([],[]) binds'
+--        let body' = foldr (\id b -> Var seqId `mkCoreApp` Var id `mkCoreApp` b)
+--                          body forceVars
+--        return (Let (Rec binds) body')
+--   where is_banged (AbsBinds {abs_binds = binds})
+--           = anyBag (is_banged . unLoc) binds
+--         is_banged (PatBind {pat_lhs = pat})
+--           = isBangedLPat pat
+--         is_banged _ = False
+
 -- Ordinary case for bindings; none should be unlifted
 ds_val_bind (_is_rec, binds) body
-  = do  { prs <- dsLHsBinds binds
+  = do  { (force_vars,prs) <- dsLHsBinds binds
+        ; let body' = foldr (\v b -> Var seqId `App` Var v `App` b) body force_vars
         ; ASSERT2( not (any (isUnLiftedType . idType . fst) prs), ppr _is_rec $$ ppr binds )
           case prs of
             [] -> return body
-            _  -> return (Let (Rec prs) body) }
+            _  -> return (Let (Rec prs) body') }
         -- Use a Rec regardless of is_rec.
         -- Why? Because it allows the binds to be all
         -- mixed up, which is what happens in one rare case
@@ -164,6 +181,24 @@ dsUnliftedBind (PatBind {pat_lhs = pat, pat_rhs = grhss, pat_rhs_ty = ty }) body
        ; return (bindNonRec var rhs result) }
 
 dsUnliftedBind bind body = pprPanic "dsLet: unlifted" (ppr bind $$ ppr body)
+
+-- | Returns list of variables to seq and bindings
+dsBangedBind :: HsBind Id -> DsM ([Id],[(Id,CoreExpr)])
+dsBangedBind bind@(PatBind {pat_lhs = pat
+                           ,pat_rhs = rhs
+                           ,pat_rhs_ty = ty
+                           ,pat_ticks = (rhs_ticks, var_ticks)})
+  | isBangedLPat pat
+  = do rhs <- dsGuarded rhs ty
+       let rhs' = mkOptTickBox rhs_ticks rhs
+       forceVar <- newSysLocalDs ty
+       sel_binds <- mkSelectorBinds var_ticks pat (Var forceVar)
+       return ([forceVar],(forceVar,rhs') : sel_binds)
+
+  | otherwise
+  = do undefined
+--dsBangedBind (AbsBinds)
+
 
 ----------------------
 unliftedMatchOnly :: HsBind Id -> Bool

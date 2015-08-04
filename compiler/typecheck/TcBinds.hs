@@ -1710,7 +1710,7 @@ decideGeneralisationPlan
    :: DynFlags -> TcTypeEnv -> [Name]
    -> [LHsBind Name] -> TcSigFun -> GeneralisationPlan
 decideGeneralisationPlan dflags type_env bndr_names lbinds sig_fn
-  | strict_pat_binds                          = NoGen
+  | unlifted_pat_binds                          = NoGen
   | Just (lbind, sig) <- one_funbind_with_sig = if isPartialSig sig
     -- See Note [Partial type signatures and generalisation]
                                                 then infer_plan
@@ -1822,7 +1822,7 @@ checkStrictBinds top_lvl rec_group orig_binds tc_binds poly_ids
     return ()
   where
     any_unlifted_bndr  = any is_unlifted poly_ids
-    any_strict_pat     = any (isStrictHsBind   . unLoc) orig_binds
+    any_strict_pat     = any (isUnliftedHsBind . unLoc) orig_binds
     any_pat_looks_lazy = any (looksLazyPatBind . unLoc) orig_binds
 
     is_unlifted id = case tcSplitSigmaTy (idType id) of
