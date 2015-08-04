@@ -28,7 +28,7 @@ module HsPat (
         mkPrefixConPat, mkCharLitPat, mkNilPat,
 
         isUnliftedHsBind, looksLazyPatBind,
-        isUnliftedLPat, isStrictLPat,
+        isUnliftedLPat, isBangedLPat,
         hsPatNeedsParens,
         isIrrefutableHsPat,
 
@@ -503,9 +503,10 @@ isUnliftedHsBind :: HsBind id -> Bool
 isUnliftedHsBind (PatBind { pat_lhs = p }) = isUnliftedLPat p
 isUnliftedHsBind _                         = False
 
-isStrictLPat :: LPat id -> Bool
-isStrictLPat (L _ (BangPat {})) = True
-isStrictLPat _                  = False
+isBangedLPat :: LPat id -> Bool
+isBangedLPat (L _ (ParPat p))   = isBangedLPat p
+isBangedLPat (L _ (BangPat {})) = True
+isBangedLPat _                  = False
 
 looksLazyPatBind :: HsBind id -> Bool
 -- Returns True of anything *except*
