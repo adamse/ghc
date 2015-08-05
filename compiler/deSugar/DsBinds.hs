@@ -156,7 +156,8 @@ dsHsBind (AbsBinds { abs_tvs = tyvars, abs_ev_vars = dicts
                 main_bind = makeCorePair dflags global' (isDefaultMethod prags)
                                          (dictArity dicts) rhs
 
-        ; return (fmap fst force_binds, force_binds `appOL` (main_bind `consOL` spec_binds)) }
+        ; return (fmap fst force_binds
+                 ,force_binds `appOL` (main_bind `consOL` spec_binds)) }
 
 dsHsBind (AbsBinds { abs_tvs = tyvars, abs_ev_vars = dicts
                    , abs_exports = exports, abs_ev_binds = ev_binds
@@ -218,7 +219,8 @@ dsHsBind (PatSynBind{}) = panic "dsHsBind: PatSynBind"
 
 
 -- | Finds all banged binds so that we can force them
-gatherBangedBinds :: Bag (LHsBind Id) -> DsM (OrdList (Id,CoreExpr), Bag (LHsBind Id))
+gatherBangedBinds
+  :: Bag (LHsBind Id) -> DsM (OrdList (Id,CoreExpr),Bag (LHsBind Id))
 gatherBangedBinds binds =
   foldrBagM (\bind (fs,bs) ->
                do (f,b) <- gatherBangedBind bind
