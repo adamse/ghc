@@ -39,7 +39,6 @@ import CoreSyn
 import CoreUtils
 import CoreFVs
 import MkCore
-import MkId (seqId)
 
 import DynFlags
 import CostCentre
@@ -115,7 +114,7 @@ ds_val_bind (NonRecursive, hsbinds) body
 -- Ordinary case for bindings; none should be unlifted
 ds_val_bind (_is_rec, binds) body
   = do  { (force_vars,prs) <- dsLHsBinds binds
-        ; let body' = foldr mkSeq body force_vars
+        ; let body' = foldr seqVar body force_vars
         ; ASSERT2( not (any (isUnLiftedType . idType . fst) prs), ppr _is_rec $$ ppr binds )
           case prs of
             [] -> return body
@@ -131,13 +130,6 @@ ds_val_bind (_is_rec, binds) body
         -- NB The previous case dealt with unlifted bindings, so we
         --    only have to deal with lifted ones now; so Rec is ok
 
-  where mkSeq v b =
-          Var seqId `mkCoreApp`
-          Type (idType v) `mkCoreApp`
-          Type (exprType b) `mkCoreApp`
-          Var v `mkCoreApp`
-          b
-
 ------------------
 dsUnliftedBind :: HsBind Id -> CoreExpr -> DsM CoreExpr
 dsUnliftedBind (AbsBinds { abs_tvs = [], abs_ev_vars = []
@@ -151,10 +143,12 @@ dsUnliftedBind (AbsBinds { abs_tvs = [], abs_ev_vars = []
        ; ds_binds <- dsTcEvBinds_s ev_binds
        ; return (mkCoreLets ds_binds body2) }
 
-dsUnliftedBind (FunBind { fun_id = L _ fun, fun_matches = matches, fun_co_fn = co_fn
-                      , fun_tick = tick, fun_infix = inf }) body
-                -- Can't be a bang pattern (that looks like a PatBind)
-                -- so must be simply unboxed
+dsUnliftedBind (FunBind { fun_id = L _ fun
+                        , fun_matches = matches
+                        , fun_co_fn = co_fn
+                        , fun_tick = tick, fun_infix = inf }) body
+               -- Can't be a bang pattern (that looks like a PatBind)
+               -- so must be simply unboxed
   = do { (args, rhs) <- matchWrapper (FunRhs (idName fun ) inf) matches
        ; MASSERT( null args ) -- Functions aren't lifted
        ; MASSERT( isIdHsWrapper co_fn )
