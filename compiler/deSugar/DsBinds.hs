@@ -222,19 +222,22 @@ dsHsBind (PatSynBind{}) = panic "dsHsBind: PatSynBind"
 gatherBangedBinds
   :: Bag (LHsBind Id) -> DsM (OrdList (Id,CoreExpr),Bag (LHsBind Id))
 gatherBangedBinds binds =
-  foldrBagM (\bind (fs,bs) ->
-               do (f,b) <- gatherBangedBind bind
-                  return (f `appOL` fs,b `consBag` bs))
-            (nilOL,emptyBag)
-            binds
+  do dflags <- getDynFlags
+     foldrBagM (\bind (fs,bs) ->
+                  do (f,b) <- (gatherBangedBind (xopt Opt_Strict dflags)) bind
+                     return (f `appOL` fs,b `consBag` bs))
+               (nilOL,emptyBag)
+               binds
 
-gatherBangedBind :: LHsBind Id -> DsM (OrdList (Id,CoreExpr), LHsBind Id)
-gatherBangedBind (L l bind)
+gatherBangedBind
+  :: Bool -> LHsBind Id -> DsM (OrdList (Id,CoreExpr),LHsBind Id)
+gatherBangedBind xstrict (L l bind)
   | PatBind{pat_lhs = pat
            ,pat_rhs = rhs
            ,pat_rhs_ty = ty
            ,pat_ticks = (ticks,lticks)} <- bind
-  , (True,pat') <- getUnBangedLPat pat -- TODO: True or XStrictData
+  , (is_banged,pat') <- getUnBangedLPat pat
+  , is_banged || xstrict
   , GRHSs ((L loc _):_) _ <- rhs -- need that location
   = do force_rhs <- dsGuarded rhs ty
        force_var <- newSysLocalDs ty
@@ -245,10 +248,14 @@ gatherBangedBind (L l bind)
              bind {pat_lhs = pat'
                   ,pat_rhs = rhs'
                   ,pat_ticks = ([],lticks)}
-       return (unitOL force',L l bind')
+       return (unitOL force',(L l bind'))
 
-  | otherwise =
-    return (nilOL,L l bind)
+  | FunBind{fun_id = id} <- bind
+  , xstrict = do (_,binds) <- dsHsBind bind
+                 return (unitOL (binds),emptyBag)
+
+  | otherwise -- TODO: other kinds of bindings
+  = return (nilOL,(L l bind))
 
 getUnBangedLPat :: LPat id -> (Bool, LPat id)
 getUnBangedLPat (L _ (ParPat p)) = getUnBangedLPat p
