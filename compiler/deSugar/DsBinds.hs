@@ -250,9 +250,9 @@ gatherBangedBind xstrict (L l bind)
                   ,pat_ticks = ([],lticks)}
        return (unitOL force',(L l bind'))
 
-  | FunBind{fun_id = id} <- bind
-  , xstrict = do (_,binds) <- dsHsBind bind
-                 return (unitOL (binds),emptyBag)
+  -- | FunBind{fun_id = id} <- bind
+  -- , xstrict = do (_,binds) <- dsHsBind bind
+  --                return (unitOL binds,emptyBag)
 
   | otherwise -- TODO: other kinds of bindings
   = return (nilOL,(L l bind))
