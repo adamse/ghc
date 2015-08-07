@@ -494,7 +494,7 @@ mkDataConRep dflags fam_envs wrap_name mb_bangs data_con
                              -- so it not make sure that the CAF info is sane
 
              wrap_sig = mkClosedStrictSig wrap_arg_dmds (dataConCPR data_con)
-             wrap_arg_dmds = map mk_dmd (dropList eq_spec wrap_bangs)
+             wrap_arg_dmds = map mk_dmd arg_ibangs
              mk_dmd str | isBanged str = evalDmd
                         | otherwise           = topDmd
                  -- The Cpr info can be important inside INLINE rhss, where the
@@ -517,7 +517,7 @@ mkDataConRep dflags fam_envs wrap_name mb_bangs data_con
                      , dcr_boxer   = mk_boxer boxers
                      , dcr_arg_tys = rep_tys
                      , dcr_stricts = rep_strs
-                     , dcr_bangs   = dropList ev_tys wrap_bangs }) }
+                     , dcr_bangs   = arg_ibangs }) }
 
   where
     (univ_tvs, ex_tvs, eq_spec, theta, orig_arg_tys, _) = dataConFullSig data_con
@@ -525,8 +525,8 @@ mkDataConRep dflags fam_envs wrap_name mb_bangs data_con
     tycon        = dataConTyCon data_con       -- The representation TyCon (not family)
     wrap_ty      = dataConUserType data_con
     ev_tys       = eqSpecPreds eq_spec ++ theta
-    all_arg_tys  = ev_tys                         ++ orig_arg_tys
-    ev_tys_bangs = map mk_pred_strict_mark ev_tys
+    all_arg_tys  = ev_tys ++ orig_arg_tys
+    ev_ibangs    = map mk_pred_strict_mark ev_tys
     orig_bangs   = dataConSrcBangs data_con
 
     wrap_arg_tys = theta ++ orig_arg_tys
@@ -535,21 +535,21 @@ mkDataConRep dflags fam_envs wrap_name mb_bangs data_con
              -- Because we are going to apply the eq_spec args manually in the
              -- wrapper
 
-    wrap_bangs =
+    arg_ibangs =
       case mb_bangs of
         Nothing    -> zipWith (dataConSrcToImplBang dflags fam_envs)
-                              all_arg_tys orig_bangs
+                              orig_arg_tys orig_bangs
         Just bangs -> bangs
 
     (rep_tys_w_strs, wrappers)
-      = unzip (zipWith dataConArgRep all_arg_tys (ev_tys_bangs ++ wrap_bangs))
+      = unzip (zipWith dataConArgRep all_arg_tys (ev_ibangs ++ arg_ibangs))
 
     (unboxers, boxers) = unzip wrappers
     (rep_tys, rep_strs) = unzip (concat rep_tys_w_strs)
 
     wrapper_reqd = not (isNewTyCon tycon)  -- Newtypes have only a worker
-                && (any isBanged wrap_bangs -- Some forcing/unboxing
-                                            -- (includes eq_spec)
+                && (any isBanged (ev_ibangs ++ arg_ibangs)
+                      -- Some forcing/unboxing (includes eq_spec)
                     || isFamInstTyCon tycon) -- Cast result
 
     initial_wrap_app = Var (dataConWorkId data_con)
