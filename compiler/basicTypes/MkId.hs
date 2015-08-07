@@ -602,6 +602,9 @@ because we want to be very sure to follow what the original module
 flags were enabled when it was compiled. So we record the decisions in
 the interface file.
 
+The HsImplBangs passed are in 1-1 correspondence with the
+dataConOrigArgTys of the DataCon.
+
 -}
 
 -------------------------
