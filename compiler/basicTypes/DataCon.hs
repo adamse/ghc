@@ -465,8 +465,9 @@ data HsSrcBang =
 data HsImplBang
   = HsLazy  -- ^ Lazy field
   | HsStrict  -- ^ Strict but not unpacked field
-  | HsUnpack -- ^ Strict and unpacked field
-     (Maybe Coercion) -- co :: arg-ty ~ product-ty HsBang
+  | HsUnpack (Maybe Coercion)
+    -- ^ Strict and unpacked field
+    -- co :: arg-ty ~ product-ty HsBang
   deriving (Data.Data, Data.Typeable)
 
 -- | What strictness annotation the user wrote
