@@ -469,6 +469,7 @@ mkDataConRep :: DynFlags
              -> FamInstEnvs
              -> Name
              -> Maybe [HsImplBang]
+                -- See Note [Bangs on imported data constructors]
              -> DataCon
              -> UniqSM DataConRep
 mkDataConRep dflags fam_envs wrap_name mb_bangs data_con
