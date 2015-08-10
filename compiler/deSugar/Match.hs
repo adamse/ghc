@@ -545,7 +545,7 @@ tidy1 v (AsPat (L _ var) pat)
 -}
 
 tidy1 v (LazyPat pat)
-  = do  { sel_prs <- mkSelectorBinds [] pat (Var v)
+  = do  { (_,sel_prs) <- mkSelectorBinds [] pat (Var v)
         ; let sel_binds =  [NonRec b rhs | (b,rhs) <- sel_prs]
         ; return (mkCoreLets sel_binds, WildPat (idType v)) }
 
