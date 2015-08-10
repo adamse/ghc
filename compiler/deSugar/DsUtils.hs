@@ -615,16 +615,17 @@ cases like
 mkSelectorBinds :: [[Tickish Id]] -- ticks to add, possibly
                 -> LPat Id      -- The pattern
                 -> CoreExpr     -- Expression to which the pattern is bound
-                -> DsM [(Id,CoreExpr)]
+                -> DsM ([Id],[(Id,CoreExpr)])
 
 mkSelectorBinds ticks (L _ (VarPat v)) val_expr
-  = return [(v, case ticks of
-                  [t] -> mkOptTickBox t val_expr
-                  _   -> val_expr)]
+  = return ([v]
+           ,[(v, case ticks of
+                    [t] -> mkOptTickBox t val_expr
+                    _   -> val_expr)])
 
 mkSelectorBinds ticks pat val_expr
   | null binders
-  = return []
+  = return ([],[])
 
   | isSingleton binders || is_simple_lpat pat
     -- See Note [mkSelectorBinds]
@@ -648,19 +649,24 @@ mkSelectorBinds ticks pat val_expr
        ; err_app <- mkErrorAppDs iRREFUT_PAT_ERROR_ID alphaTy (ppr pat)
        ; err_var <- newSysLocalDs (mkForAllTy alphaTyVar alphaTy)
        ; binds   <- zipWithM (mk_bind val_var err_var) ticks' binders
-       ; return ( (val_var, val_expr) :
-                  (err_var, Lam alphaTyVar err_app) :
-                  binds ) }
+       ; return ([val_var]
+                ,(val_var, val_expr) :
+                 (err_var, Lam alphaTyVar err_app) :
+                 binds) }
 
   | otherwise
-  = do { error_expr <- mkErrorAppDs iRREFUT_PAT_ERROR_ID   tuple_ty (ppr pat)
-       ; tuple_expr <- matchSimply val_expr PatBindRhs pat local_tuple error_expr
+  = do { val_var <- newSysLocalDs (hsLPatType pat)
+       ; error_expr <- mkErrorAppDs iRREFUT_PAT_ERROR_ID tuple_ty (ppr pat)
+       ; tuple_expr <- matchSimply (Var val_var) PatBindRhs pat local_tuple error_expr
        ; tuple_var <- newSysLocalDs tuple_ty
        ; let mk_tup_bind tick binder
               = (binder, mkOptTickBox tick $
                             mkTupleSelector local_binders binder
                                             tuple_var (Var tuple_var))
-       ; return ( (tuple_var, tuple_expr) : zipWith mk_tup_bind ticks' binders ) }
+       ; return ([val_var]
+                ,(val_var,val_expr) :
+                 (tuple_var, tuple_expr) :
+                 zipWith mk_tup_bind ticks' binders) }
   where
     binders       = collectPatBinders pat
     ticks'        = ticks ++ repeat []
