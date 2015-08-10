@@ -36,7 +36,10 @@ expectedGhcOnlyExtensions = ["RelaxedLayout",
                              "DuplicateRecordFields",
                              "StaticPointers",
                              "StrictData",
-                             "ApplicativeDo"] -- TODO add this to Cabal
+                             "ApplicativeDo",
+                             "DeriveLift", -- TODO add this to Cabal
+                             "Strict"]
+>>>>>>> Add Strict to expected GHC language extensions test
 
 expectedCabalOnlyExtensions :: [String]
 expectedCabalOnlyExtensions = ["Generics",
