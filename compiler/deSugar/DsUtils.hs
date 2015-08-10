@@ -657,7 +657,8 @@ mkSelectorBinds ticks pat val_expr
   | otherwise
   = do { val_var <- newSysLocalDs (hsLPatType pat)
        ; error_expr <- mkErrorAppDs iRREFUT_PAT_ERROR_ID tuple_ty (ppr pat)
-       ; tuple_expr <- matchSimply (Var val_var) PatBindRhs pat local_tuple error_expr
+       ; tuple_expr
+           <- matchSimply (Var val_var) PatBindRhs pat local_tuple error_expr
        ; tuple_var <- newSysLocalDs tuple_ty
        ; let mk_tup_bind tick binder
               = (binder, mkOptTickBox tick $
