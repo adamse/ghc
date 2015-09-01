@@ -615,10 +615,10 @@ cases like
 mkSelectorBinds :: [[Tickish Id]] -- ticks to add, possibly
                 -> LPat Id      -- The pattern
                 -> CoreExpr     -- Expression to which the pattern is bound
-                -> DsM ([Id],[(Id,CoreExpr)])
+                -> DsM (Id,[(Id,CoreExpr)])
 
 mkSelectorBinds ticks (L _ (VarPat v)) val_expr
-  = return ([v]
+  = return (v
            ,[(v, case ticks of
                     [t] -> mkOptTickBox t val_expr
                     _   -> val_expr)])

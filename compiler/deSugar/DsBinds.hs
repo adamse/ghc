@@ -96,15 +96,17 @@ ds_lhs_binds binds
                          id ([], nilOL) ds_bs) }
 
 dsLHsBind :: LHsBind Id -> DsM ([Id], OrdList (Id,CoreExpr))
-dsLHsBind (L loc bind) = putSrcSpanDs loc $ dsHsBind bind
+dsLHsBind (L loc bind) = do dflags <- getDynFlags
+                            putSrcSpanDs loc $ dsHsBind dflags bind
 
-dsHsBind :: HsBind Id
+dsHsBind :: DynFlags
+         -> HsBind Id
          -> DsM ([Id] -- variables to which the rhs's are bound to
                  ,OrdList (Id,CoreExpr))
 
-dsHsBind (VarBind { var_id = var, var_rhs = expr, var_inline = inline_regardless })
-  = do  { dflags <- getDynFlags
-        ; core_expr <- dsLExpr expr
+dsHsBind dflags
+         (VarBind { var_id = var, var_rhs = expr, var_inline = inline_regardless })
+  = do  { core_expr <- dsLExpr expr
                 -- Dictionary bindings are always VarBinds,
                 -- so we only need do this here
         ; let var' | inline_regardless = var `setIdUnfolding` mkCompulsoryUnfolding core_expr
@@ -115,11 +117,11 @@ dsHsBind (VarBind { var_id = var, var_rhs = expr, var_inline = inline_regardless
                           else []
         ; return (force_var, unitOL core_bind) }
 
-dsHsBind (FunBind { fun_id = L _ fun, fun_matches = matches
+dsHsBind dflags
+         (FunBind { fun_id = L _ fun, fun_matches = matches
                   , fun_co_fn = co_fn, fun_tick = tick
                   , fun_infix = inf })
- = do   { dflags <- getDynFlags
-        ; (args, body) <- matchWrapper (FunRhs (idName fun) inf) matches
+ = do   { (args, body) <- matchWrapper (FunRhs (idName fun) inf) matches
         ; let body' = mkOptTickBox tick body
         ; rhs <- dsHsWrapper co_fn (mkLams args body')
         ; let core_binds@(id,_) = makeCorePair dflags fun False 0 rhs
@@ -129,12 +131,12 @@ dsHsBind (FunBind { fun_id = L _ fun, fun_matches = matches
         ; {- pprTrace "dsHsBind" (ppr fun <+> ppr (idInlinePragma fun)) $ -}
            return (force_var, unitOL core_binds) }
 
-dsHsBind (PatBind { pat_lhs = pat, pat_rhs = grhss, pat_rhs_ty = ty
+dsHsBind dflags
+         (PatBind { pat_lhs = pat, pat_rhs = grhss, pat_rhs_ty = ty
                   , pat_ticks = (rhs_tick, var_ticks) })
-  = do  { dflags <- getDynFlags
-        ; body_expr <- dsGuarded grhss ty
+  = do  { body_expr <- dsGuarded grhss ty
         ; let body' = mkOptTickBox rhs_tick body_expr
-              (is_strict,pat') = getUnBangedLPat (xopt Opt_Strict dflags) pat
+              (is_strict,pat') = getUnBangedLPat dflags pat
         ; (force_var,sel_binds) <- mkSelectorBinds var_ticks pat' body'
           -- We silently ignore inline pragmas; no makeCorePair
           -- Not so cool, but really doesn't matter
@@ -147,13 +149,15 @@ dsHsBind (PatBind { pat_lhs = pat, pat_rhs = grhss, pat_rhs_ty = ty
         -- Non-recursive bindings come through this way
         -- So do self-recursive bindings, and recursive bindings
         -- that have been chopped up with type signatures
-dsHsBind (AbsBinds { abs_tvs = tyvars, abs_ev_vars = dicts
+dsHsBind dflags
+         (AbsBinds { abs_tvs = tyvars, abs_ev_vars = dicts
                    , abs_exports = [export]
                    , abs_ev_binds = ev_binds, abs_binds = binds })
   | ABE { abe_wrap = wrap, abe_poly = global
         , abe_mono = local, abe_prags = prags } <- export
-  = do  { dflags <- getDynFlags
-        ; (local_force_vars, bind_prs) <- ds_lhs_binds binds
+  , not (xopt Opt_Strict dflags)
+  , not (anyBag (isBangedPatBind . unLoc) binds)
+  = do  { (local_force_vars, bind_prs) <- ds_lhs_binds binds
         ; let (_missing,global_force_vars)
                 = matchup_exports [export] local_force_vars
         ; let core_bind = Rec (fromOL bind_prs)
@@ -173,21 +177,22 @@ dsHsBind (AbsBinds { abs_tvs = tyvars, abs_ev_vars = dicts
         ; return (global_force_vars
                  ,main_bind `consOL` spec_binds) }
 
-dsHsBind (AbsBinds { abs_tvs = tyvars, abs_ev_vars = dicts
+dsHsBind dflags
+         (AbsBinds { abs_tvs = tyvars, abs_ev_vars = dicts
                    , abs_exports = exports, abs_ev_binds = ev_binds
                    , abs_binds = binds })
          -- See Note [Desugaring AbsBinds]
-  = do  { dflags <- getDynFlags
-        ; (local_force_vars, bind_prs) <- ds_lhs_binds binds
+  = do  { (local_force_vars, bind_prs) <- ds_lhs_binds binds
         ; let core_bind = Rec [ makeCorePair dflags (add_inline lcl_id) False 0 rhs
                               | (lcl_id, rhs) <- fromOL bind_prs ]
                 -- Monomorphic recursion possible, hence Rec
 
               locals       = map abe_mono exports
-              tup_expr     = mkBigCoreVarTup locals
+              (not_exported_force_vars,exported_force_vars)
+                           = matchup_exports exports local_force_vars
+              all_locals   = locals ++ not_exported_force_vars
+              tup_expr     = mkBigCoreVarTup all_locals
               tup_ty       = exprType tup_expr
-              (_missing,global_force_vars)
-                = matchup_exports exports local_force_vars
         ; ds_binds <- dsTcEvBinds_s ev_binds
         ; let poly_tup_rhs = mkLams tyvars $ mkLams dicts $
                              mkCoreLets ds_binds $
@@ -195,13 +200,14 @@ dsHsBind (AbsBinds { abs_tvs = tyvars, abs_ev_vars = dicts
                              tup_expr
 
         ; poly_tup_id <- newSysLocalDs (exprType poly_tup_rhs)
+        ; extra_exports <- mapM mk_export not_exported_force_vars
 
         ; let mk_bind (ABE { abe_wrap = wrap, abe_poly = global
                            , abe_mono = local, abe_prags = spec_prags })
                 = do { tup_id  <- newSysLocalDs tup_ty
                      ; rhs <- dsHsWrapper wrap $
                                  mkLams tyvars $ mkLams dicts $
-                                 mkTupleSelector locals local tup_id $
+                                 mkTupleSelector all_locals local tup_id $
                                  mkVarApps (Var poly_tup_id) (tyvars ++ dicts)
                      ; let rhs_for_spec = Let (NonRec poly_tup_id poly_tup_rhs) rhs
                      ; (spec_binds, rules) <- dsSpecs rhs_for_spec spec_prags
@@ -212,9 +218,9 @@ dsHsBind (AbsBinds { abs_tvs = tyvars, abs_ev_vars = dicts
                            -- Id is just the selector.  Hmm.
                      ; return ((global', rhs) `consOL` spec_binds) }
 
-        ; export_binds_s <- mapM mk_bind exports
+        ; export_binds_s <- mapM mk_bind (exports ++ extra_exports)
 
-        ; return (global_force_vars
+        ; return (exported_force_vars ++ map abe_poly extra_exports
                  ,(poly_tup_id, poly_tup_rhs) `consOL`
                    concatOL export_binds_s) }
   where
@@ -229,16 +235,28 @@ dsHsBind (AbsBinds { abs_tvs = tyvars, abs_ev_vars = dicts
     add_inline :: Id -> Id    -- tran
     add_inline lcl_id = lookupVarEnv inline_env lcl_id `orElse` lcl_id
 
-dsHsBind (PatSynBind{}) = panic "dsHsBind: PatSynBind"
+    mk_export local =
+      do global <- newSysLocalDs (exprType (mkLams tyvars (mkLams dicts (Var local))))
+         return (ABE {abe_poly = global
+                     ,abe_mono = local
+                     ,abe_wrap = WpHole
+                     ,abe_prags = SpecPrags []})
 
-getUnBangedLPat :: Bool -- XStrict?
+dsHsBind _ (PatSynBind{}) = panic "dsHsBind: PatSynBind"
+
+getUnBangedLPat :: DynFlags
                 -> LPat id -- Original pattern
                 -> (Bool -- Desugar as strict pattern
                    ,LPat id) -- Modified pattern
-getUnBangedLPat xstrict (L _ (ParPat p)) = getUnBangedLPat xstrict p
-getUnBangedLPat _ (L _ (BangPat p))      = (True,p)
-getUnBangedLPat True (L _ (LazyPat p))   = (False,p)
-getUnBangedLPat xstrict p                = (xstrict,p)
+getUnBangedLPat dflags (L _ (ParPat p))
+  = getUnBangedLPat dflags p
+getUnBangedLPat _ (L _ (BangPat p))
+  = (True,p)
+getUnBangedLPat dflags (L _ (LazyPat p))
+  | xopt Opt_Strict dflags
+  = (False,p)
+getUnBangedLPat dflags p
+  = (xopt Opt_Strict dflags,p)
 
 matchup_exports :: [ABExport Id]
                 -> [Id]
@@ -258,6 +276,8 @@ matchup_export (ex:exs) id
   = if id == local
     then Just global
     else matchup_export exs id
+
+--makeup_export :: Id -> DsM (ABExport Id)
 
 ------------------------
 makeCorePair :: DynFlags -> Id -> Bool -> Arity -> CoreExpr -> (Id, CoreExpr)
