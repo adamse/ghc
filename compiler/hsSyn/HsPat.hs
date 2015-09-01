@@ -28,7 +28,7 @@ module HsPat (
         mkPrefixConPat, mkCharLitPat, mkNilPat,
 
         isUnliftedHsBind, looksLazyPatBind,
-        isUnliftedLPat, isBangedLPat,
+        isUnliftedLPat, isBangedLPat, isBangedPatBind,
         hsPatNeedsParens,
         isIrrefutableHsPat,
 
@@ -502,6 +502,10 @@ isUnliftedHsBind :: HsBind id -> Bool
 -- Defined in this module because HsPat is above HsBinds in the import graph
 isUnliftedHsBind (PatBind { pat_lhs = p }) = isUnliftedLPat p
 isUnliftedHsBind _                         = False
+
+isBangedPatBind :: HsBind id -> Bool
+isBangedPatBind (PatBind {pat_lhs = pat}) = isBangedLPat pat
+isBangedPatBind _ = False
 
 isBangedLPat :: LPat id -> Bool
 isBangedLPat (L _ (ParPat p))   = isBangedLPat p
