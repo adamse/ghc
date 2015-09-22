@@ -105,7 +105,9 @@ dsHsBind :: DynFlags
                  ,OrdList (Id,CoreExpr))
 
 dsHsBind dflags
-         (VarBind { var_id = var, var_rhs = expr, var_inline = inline_regardless })
+         (VarBind { var_id = var
+                  , var_rhs = expr
+                  , var_inline = inline_regardless })
   = do  { core_expr <- dsLExpr expr
                 -- Dictionary bindings are always VarBinds,
                 -- so we only need do this here
@@ -125,9 +127,10 @@ dsHsBind dflags
         ; let body' = mkOptTickBox tick body
         ; rhs <- dsHsWrapper co_fn (mkLams args body')
         ; let core_binds@(id,_) = makeCorePair dflags fun False 0 rhs
-              force_var = if xopt Opt_Strict dflags
-                          then [id]
-                          else []
+              force_var =
+                if xopt Opt_Strict dflags && matchGroupArity matches == 0
+                then [id]
+                else []
         ; {- pprTrace "dsHsBind" (ppr fun <+> ppr (idInlinePragma fun)) $ -}
            return (force_var, unitOL core_binds) }
 
@@ -141,8 +144,8 @@ dsHsBind dflags
           -- We silently ignore inline pragmas; no makeCorePair
           -- Not so cool, but really doesn't matter
         ; let force_var' = if is_strict
-                              then force_var
-                              else []
+                           then [force_var]
+                           else []
         ; return (force_var', toOL sel_binds) }
 
         -- A common case: one exported variable
@@ -155,8 +158,8 @@ dsHsBind dflags
                    , abs_ev_binds = ev_binds, abs_binds = binds })
   | ABE { abe_wrap = wrap, abe_poly = global
         , abe_mono = local, abe_prags = prags } <- export
-  , not (xopt Opt_Strict dflags)
-  , not (anyBag (isBangedPatBind . unLoc) binds)
+  , not (xopt Opt_Strict dflags)                  -- Handle strict binds
+  , not (anyBag (isBangedPatBind . unLoc) binds)  -- below
   = do  { (local_force_vars, bind_prs) <- ds_lhs_binds binds
         ; let (_missing,global_force_vars)
                 = matchup_exports [export] local_force_vars
@@ -200,6 +203,7 @@ dsHsBind dflags
                              tup_expr
 
         ; poly_tup_id <- newSysLocalDs (exprType poly_tup_rhs)
+
         ; extra_exports <- mapM mk_export not_exported_force_vars
 
         ; let mk_bind (ABE { abe_wrap = wrap, abe_poly = global
@@ -236,7 +240,8 @@ dsHsBind dflags
     add_inline lcl_id = lookupVarEnv inline_env lcl_id `orElse` lcl_id
 
     mk_export local =
-      do global <- newSysLocalDs (exprType (mkLams tyvars (mkLams dicts (Var local))))
+      do global <- newSysLocalDs
+                     (exprType (mkLams tyvars (mkLams dicts (Var local))))
          return (ABE {abe_poly = global
                      ,abe_mono = local
                      ,abe_wrap = WpHole
@@ -245,9 +250,11 @@ dsHsBind dflags
 dsHsBind _ (PatSynBind{}) = panic "dsHsBind: PatSynBind"
 
 getUnBangedLPat :: DynFlags
-                -> LPat id -- Original pattern
-                -> (Bool -- Desugar as strict pattern
-                   ,LPat id) -- Modified pattern
+                -> LPat id  -- ^ Original pattern
+                -> (Bool
+                   ,LPat id)
+                   -- ^ Bool = is strict pattern,
+                   -- LPat = Unbanged pattern
 getUnBangedLPat dflags (L _ (ParPat p))
   = getUnBangedLPat dflags p
 getUnBangedLPat _ (L _ (BangPat p))
@@ -258,10 +265,14 @@ getUnBangedLPat dflags (L _ (LazyPat p))
 getUnBangedLPat dflags p
   = (xopt Opt_Strict dflags,p)
 
-matchup_exports :: [ABExport Id]
-                -> [Id]
-                -> ([Id] -- local ids missing exports
-                   ,[Id]) -- global exported ids
+
+-- | Match force variables with existing exported variables (when
+-- desugaring strict bindings)
+matchup_exports :: [ABExport Id] -- ^ existing exports
+                -> [Id] -- ^ variables to export
+                -> ([Id]
+                   ,[Id]) -- ^ (local ids missing exports, global
+                          -- exported ids)
 matchup_exports exs ids = go ids ([],[])
   where go [] ids = ids
         go (id:ids) (missing,found) =
@@ -277,7 +288,6 @@ matchup_export (ex:exs) id
     then Just global
     else matchup_export exs id
 
---makeup_export :: Id -> DsM (ABExport Id)
 
 ------------------------
 makeCorePair :: DynFlags -> Id -> Bool -> Arity -> CoreExpr -> (Id, CoreExpr)
@@ -459,6 +469,14 @@ gotten from the binding for fromT_1.
 
 It might be better to have just one level of AbsBinds, but that requires more
 thought!
+
+Note [Desugar Strict binds]
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+TODO fill in here.
+
+https://ghc.haskell.org/trac/ghc/wiki/StrictPragma
+
 -}
 
 ------------------------
