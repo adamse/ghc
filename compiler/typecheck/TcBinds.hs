@@ -1865,7 +1865,7 @@ polyBindErr :: [LHsBind Name] -> SDoc
 polyBindErr binds
   = hang (ptext (sLit "You can't mix polymorphic and unlifted bindings"))
        2 (vcat [vcat (map ppr binds),
-                ptext (sLit "Probable fix: use a bang pattern")])
+                ptext (sLit "Probable fix: add a type signature")])
 
 strictBindErr :: String -> Bool -> [LHsBind Name] -> SDoc
 strictBindErr flavour any_unlifted_bndr binds
