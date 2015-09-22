@@ -612,10 +612,11 @@ cases like
      (p,q) = e
 -}
 
-mkSelectorBinds :: [[Tickish Id]] -- ticks to add, possibly
-                -> LPat Id      -- The pattern
-                -> CoreExpr     -- Expression to which the pattern is bound
+mkSelectorBinds :: [[Tickish Id]] -- ^ ticks to add, possibly
+                -> LPat Id        -- ^ The pattern
+                -> CoreExpr       -- ^ Expression to which the pattern is bound
                 -> DsM (Id,[(Id,CoreExpr)])
+                -- ^ (Id to which the expression is bound, The actual binds)
 
 mkSelectorBinds ticks (L _ (VarPat v)) val_expr
   = return (v
@@ -625,7 +626,11 @@ mkSelectorBinds ticks (L _ (VarPat v)) val_expr
 
 mkSelectorBinds ticks pat val_expr
   | null binders
-  = return ([],[])
+    -- In case of strictness we still need to bind val_expr to be able
+    -- to evaluate it. See Note [Desugar Strict binds] in DsBinds
+  = do { val_var <- newSysLocalDs (hsLPatType pat)
+       ; return (val_var, [(val_var, val_expr)])
+       }
 
   | isSingleton binders || is_simple_lpat pat
     -- See Note [mkSelectorBinds]
@@ -649,7 +654,7 @@ mkSelectorBinds ticks pat val_expr
        ; err_app <- mkErrorAppDs iRREFUT_PAT_ERROR_ID alphaTy (ppr pat)
        ; err_var <- newSysLocalDs (mkForAllTy alphaTyVar alphaTy)
        ; binds   <- zipWithM (mk_bind val_var err_var) ticks' binders
-       ; return ([val_var]
+       ; return (val_var
                 ,(val_var, val_expr) :
                  (err_var, Lam alphaTyVar err_app) :
                  binds) }
@@ -664,7 +669,7 @@ mkSelectorBinds ticks pat val_expr
               = (binder, mkOptTickBox tick $
                             mkTupleSelector local_binders binder
                                             tuple_var (Var tuple_var))
-       ; return ([val_var]
+       ; return (val_var
                 ,(val_var,val_expr) :
                  (tuple_var, tuple_expr) :
                  zipWith mk_tup_bind ticks' binders) }

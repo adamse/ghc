@@ -5,10 +5,10 @@ import Debug.Trace
 
 data C a = C a
 
-main :: IO ()
+poly :: a
+poly = poly
 
-main = let x :: a -> a
-           !x = \a -> a
+main = let !(a, b) = (trace "was here" (poly, \a -> a)) :: (b, a -> a)
        in return ()
 
 
