@@ -654,6 +654,7 @@ data ExtensionFlag
    | Opt_PartialTypeSignatures
    | Opt_NamedWildCards
    | Opt_StaticPointers
+   | Opt_Strict
    | Opt_StrictData
    deriving (Eq, Enum, Show)
 
