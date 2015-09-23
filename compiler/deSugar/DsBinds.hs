@@ -81,28 +81,28 @@ import Fingerprint(Fingerprint(..), fingerprintString)
 -}
 
 dsTopLHsBinds :: LHsBinds Id -> DsM (OrdList (Id,CoreExpr))
-dsTopLHsBinds binds = fmap snd (ds_lhs_binds binds)
+dsTopLHsBinds binds = fmap (toOL . snd) (ds_lhs_binds binds)
 
 dsLHsBinds :: LHsBinds Id -> DsM ([Id], [(Id,CoreExpr)])
 dsLHsBinds binds = do { (force_vars, binds') <- ds_lhs_binds binds
-                      ; return (force_vars, fromOL binds') }
+                      ; return (force_vars, binds') }
 
 ------------------------
-ds_lhs_binds :: LHsBinds Id -> DsM ([Id], OrdList (Id,CoreExpr))
+ds_lhs_binds :: LHsBinds Id -> DsM ([Id], [(Id,CoreExpr)])
 
 ds_lhs_binds binds
   = do { ds_bs <- mapBagM dsLHsBind binds
-       ; return (foldBag (\(a, a') (b, b') -> (a ++ b, a' `appOL` b'))
-                         id ([], nilOL) ds_bs) }
+       ; return (foldBag (\(a, a') (b, b') -> (a ++ b, a' ++ b'))
+                         id ([], []) ds_bs) }
 
-dsLHsBind :: LHsBind Id -> DsM ([Id], OrdList (Id,CoreExpr))
+dsLHsBind :: LHsBind Id -> DsM ([Id], [(Id,CoreExpr)])
 dsLHsBind (L loc bind) = do dflags <- getDynFlags
                             putSrcSpanDs loc $ dsHsBind dflags bind
 
 dsHsBind :: DynFlags
          -> HsBind Id
          -> DsM ([Id] -- variables to which the rhs's are bound to
-                 ,OrdList (Id,CoreExpr))
+                 ,[(Id,CoreExpr)])
 
 dsHsBind dflags
          (VarBind { var_id = var
@@ -117,7 +117,7 @@ dsHsBind dflags
               force_var = if xopt Opt_Strict dflags
                           then [id]
                           else []
-        ; return (force_var, unitOL core_bind) }
+        ; return (force_var, [core_bind]) }
 
 dsHsBind dflags
          (FunBind { fun_id = L _ fun, fun_matches = matches
@@ -132,7 +132,7 @@ dsHsBind dflags
                 then [id]
                 else []
         ; {- pprTrace "dsHsBind" (ppr fun <+> ppr (idInlinePragma fun)) $ -}
-           return (force_var, unitOL core_binds) }
+           return (force_var, [core_binds]) }
 
 dsHsBind dflags
          (PatBind { pat_lhs = pat, pat_rhs = grhss, pat_rhs_ty = ty
@@ -146,7 +146,7 @@ dsHsBind dflags
         ; let force_var' = if is_strict
                            then [force_var]
                            else []
-        ; return (force_var', toOL sel_binds) }
+        ; return (force_var', sel_binds) }
 
         -- A common case: one exported variable
         -- Non-recursive bindings come through this way
@@ -163,7 +163,7 @@ dsHsBind dflags
   = do  { (local_force_vars, bind_prs) <- ds_lhs_binds binds
         ; let (_missing,global_force_vars)
                 = matchup_exports [export] local_force_vars
-        ; let core_bind = Rec (fromOL bind_prs)
+        ; let core_bind = Rec bind_prs
         ; ds_binds <- dsTcEvBinds_s ev_binds
         ; rhs <- dsHsWrapper wrap $  -- Usually the identity
                             mkLams tyvars $ mkLams dicts $
@@ -178,7 +178,7 @@ dsHsBind dflags
                                          (dictArity dicts) rhs
 
         ; return (global_force_vars
-                 ,main_bind `consOL` spec_binds) }
+                 ,main_bind : fromOL spec_binds) }
 
 dsHsBind dflags
          (AbsBinds { abs_tvs = tyvars, abs_ev_vars = dicts
@@ -187,7 +187,7 @@ dsHsBind dflags
          -- See Note [Desugaring AbsBinds]
   = do  { (local_force_vars, bind_prs) <- ds_lhs_binds binds
         ; let core_bind = Rec [ makeCorePair dflags (add_inline lcl_id) False 0 rhs
-                              | (lcl_id, rhs) <- fromOL bind_prs ]
+                              | (lcl_id, rhs) <- bind_prs ]
                 -- Monomorphic recursion possible, hence Rec
 
               locals       = map abe_mono exports
@@ -220,13 +220,13 @@ dsHsBind dflags
                            -- Kill the INLINE pragma because it applies to
                            -- the user written (local) function.  The global
                            -- Id is just the selector.  Hmm.
-                     ; return ((global', rhs) `consOL` spec_binds) }
+                     ; return ((global', rhs) : fromOL spec_binds) }
 
         ; export_binds_s <- mapM mk_bind (exports ++ extra_exports)
 
         ; return (exported_force_vars ++ map abe_poly extra_exports
-                 ,(poly_tup_id, poly_tup_rhs) `consOL`
-                   concatOL export_binds_s) }
+                 ,(poly_tup_id, poly_tup_rhs) :
+                   concat export_binds_s) }
   where
     inline_env :: IdEnv Id   -- Maps a monomorphic local Id to one with
                              -- the inline pragma from the source
