@@ -1,23 +1,16 @@
-{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE Strict #-}
 module Main where
 
 import Debug.Trace
 
-data C a = C a
+main = let False = trace "no binders" False
 
-poly :: a
-poly = poly
+           a :: a -> a
+           a = trace "polymorphic" id
 
-main = let !(a, b) = (trace "was here" (poly, \a -> a)) :: (b, a -> a)
+           f :: Eq a => a -> a -> Bool
+           f = trace "overloaded" (==)
+
+           xs :: [Int]
+           xs = (trace "recursive" (:) 1 xs)
        in return ()
-
-
--- main = let (a, b) = trace "evaluated b" ('a', '1')
---        in return a
-
--- main =
---   let !(C a) = C undefined
---   in return ()
-
--- main = let C a b c = C '1' '2' '3'
---        in putChar a >> return ()
