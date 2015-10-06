@@ -37,7 +37,6 @@ expectedGhcOnlyExtensions = ["RelaxedLayout",
                              "StaticPointers",
                              "StrictData",
                              "ApplicativeDo",
-                             "DeriveLift", -- TODO add this to Cabal
                              "Strict"]
 
 expectedCabalOnlyExtensions :: [String]
