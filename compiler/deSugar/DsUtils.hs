@@ -616,7 +616,9 @@ mkSelectorBinds :: [[Tickish Id]] -- ^ ticks to add, possibly
                 -> LPat Id        -- ^ The pattern
                 -> CoreExpr       -- ^ Expression to which the pattern is bound
                 -> DsM (Id,[(Id,CoreExpr)])
-                -- ^ (Id to which the expression is bound, The actual binds)
+                -- ^ Id the rhs is bound to, for desugaring strict
+                -- binds (see Note [Desugar Strict binds] in DsBinds)
+                -- and all the desugared binds
 
 mkSelectorBinds ticks (L _ (VarPat v)) val_expr
   = return (v
@@ -626,8 +628,8 @@ mkSelectorBinds ticks (L _ (VarPat v)) val_expr
 
 mkSelectorBinds ticks pat val_expr
   | null binders
-    -- In case of strictness we still need to bind val_expr to be able
-    -- to evaluate it. See Note [Desugar Strict binds] in DsBinds
+    -- In case of strictness we still need to bind val_expr to force
+    -- it. See Note [Desugar Strict binds] in DsBinds.
   = do { val_var <- newSysLocalDs (hsLPatType pat)
        ; return (val_var, [(val_var, val_expr)])
        }

@@ -80,14 +80,20 @@ import Fingerprint(Fingerprint(..), fingerprintString)
 ************************************************************************
 -}
 
+-- | Desugar top level binds, strict binds are treated like normal
+-- binds since there is no good time to force before first usage.
 dsTopLHsBinds :: LHsBinds Id -> DsM (OrdList (Id,CoreExpr))
 dsTopLHsBinds binds = fmap (toOL . snd) (ds_lhs_binds binds)
 
-dsLHsBinds :: LHsBinds Id -> DsM ([Id], [(Id,CoreExpr)])
+-- | Desugar all other kind of bindings, Ids of strict binds are returned to
+-- later be forced in the binding gorup body, see Note [Desugar Strict binds]
+dsLHsBinds :: LHsBinds Id
+           -> DsM ([Id], [(Id,CoreExpr)])
 dsLHsBinds binds = do { (force_vars, binds') <- ds_lhs_binds binds
                       ; return (force_vars, binds') }
 
 ------------------------
+
 ds_lhs_binds :: LHsBinds Id -> DsM ([Id], [(Id,CoreExpr)])
 
 ds_lhs_binds binds
@@ -95,14 +101,18 @@ ds_lhs_binds binds
        ; return (foldBag (\(a, a') (b, b') -> (a ++ b, a' ++ b'))
                          id ([], []) ds_bs) }
 
-dsLHsBind :: LHsBind Id -> DsM ([Id], [(Id,CoreExpr)])
+dsLHsBind :: LHsBind Id
+          -> DsM ([Id], [(Id,CoreExpr)])
 dsLHsBind (L loc bind) = do dflags <- getDynFlags
                             putSrcSpanDs loc $ dsHsBind dflags bind
 
+-- | Desugar a single binding (or group of recursive binds).
 dsHsBind :: DynFlags
          -> HsBind Id
-         -> DsM ([Id] -- variables to which the rhs's are bound to
-                 ,[(Id,CoreExpr)])
+         -> DsM ([Id], [(Id,CoreExpr)])
+         -- ^ The Ids of strict binds, to be forced in the body of the
+         -- binding group see Note [Desugar Strict binds] and all
+         -- bindings and their desugared right hand sides.
 
 dsHsBind dflags
          (VarBind { var_id = var
@@ -128,7 +138,8 @@ dsHsBind dflags
         ; rhs <- dsHsWrapper co_fn (mkLams args body')
         ; let core_binds@(id,_) = makeCorePair dflags fun False 0 rhs
               force_var =
-                if xopt Opt_Strict dflags && matchGroupArity matches == 0
+                if xopt Opt_Strict dflags
+                   && matchGroupArity matches == 0 -- no need to force lambdas
                 then [id]
                 else []
         ; {- pprTrace "dsHsBind" (ppr fun <+> ppr (idInlinePragma fun)) $ -}
@@ -148,7 +159,7 @@ dsHsBind dflags
                            else []
         ; return (force_var', sel_binds) }
 
-        -- A common case: one exported variable
+        -- A common case: one exported variable, only non-strict binds
         -- Non-recursive bindings come through this way
         -- So do self-recursive bindings, and recursive bindings
         -- that have been chopped up with type signatures
@@ -158,8 +169,8 @@ dsHsBind dflags
                    , abs_ev_binds = ev_binds, abs_binds = binds })
   | ABE { abe_wrap = wrap, abe_poly = global
         , abe_mono = local, abe_prags = prags } <- export
-  , not (xopt Opt_Strict dflags)                  -- Handle strict binds
-  , not (anyBag (isBangedPatBind . unLoc) binds)  -- below
+  , not (xopt Opt_Strict dflags)                  -- Don't handle
+  , not (anyBag (isBangedPatBind . unLoc) binds)  -- strict binds here
   = do  { (local_force_vars, bind_prs) <- ds_lhs_binds binds
         ; let (_missing,global_force_vars)
                 = matchup_exports [export] local_force_vars
@@ -204,6 +215,8 @@ dsHsBind dflags
 
         ; poly_tup_id <- newSysLocalDs (exprType poly_tup_rhs)
 
+        -- Sometimes we need to make new export to desugar strict
+        -- binds, see Note [Desugar Strict binds]
         ; extra_exports <- mapM mk_export not_exported_force_vars
 
         ; let mk_bind (ABE { abe_wrap = wrap, abe_poly = global
@@ -249,12 +262,11 @@ dsHsBind dflags
 
 dsHsBind _ (PatSynBind{}) = panic "dsHsBind: PatSynBind"
 
+-- | Remove any bang from a pattern and say if it is a strict bind,
+-- also make irrefutable patterns ordinary patterns if -XStrict
 getUnBangedLPat :: DynFlags
                 -> LPat id  -- ^ Original pattern
-                -> (Bool
-                   ,LPat id)
-                   -- ^ Bool = is strict pattern,
-                   -- LPat = Unbanged pattern
+                -> (Bool, LPat id) -- is bind strict?, pattern without bangs
 getUnBangedLPat dflags (L _ (ParPat p))
   = getUnBangedLPat dflags p
 getUnBangedLPat _ (L _ (BangPat p))
@@ -266,13 +278,12 @@ getUnBangedLPat dflags p
   = (xopt Opt_Strict dflags,p)
 
 
--- | Match force variables with existing exported variables (when
+-- | Match force variables with existing exported variables (used when
 -- desugaring strict bindings)
-matchup_exports :: [ABExport Id] -- ^ existing exports
-                -> [Id] -- ^ variables to export
-                -> ([Id]
-                   ,[Id]) -- ^ (local ids missing exports, global
-                          -- exported ids)
+matchup_exports :: [ABExport Id] -- ^ All exports
+                -> [Id]          -- ^ Local Ids to export
+                -> ([Id], [Id])  -- ^ local Ids missing exports,
+                                 -- global exported Ids
 matchup_exports exs ids = go ids ([],[])
   where go [] ids = ids
         go (id:ids) (missing,found) =
@@ -280,13 +291,13 @@ matchup_exports exs ids = go ids ([],[])
             Nothing -> go ids (id : missing,found)
             Just id -> go ids (missing,id : found)
 
-matchup_export :: [ABExport Id] -> Id -> Maybe Id
-matchup_export [] _ = Nothing
-matchup_export (ex:exs) id
-  | ABE {abe_mono = local,abe_poly = global} <- ex
-  = if id == local
-    then Just global
-    else matchup_export exs id
+        matchup_export :: [ABExport Id] -> Id -> Maybe Id
+        matchup_export [] _ = Nothing
+        matchup_export (ex:exs) id
+          | ABE {abe_mono = local,abe_poly = global} <- ex
+          = if id == local
+            then Just global
+            else matchup_export exs id
 
 
 ------------------------
@@ -470,12 +481,40 @@ gotten from the binding for fromT_1.
 It might be better to have just one level of AbsBinds, but that requires more
 thought!
 
+
 Note [Desugar Strict binds]
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-TODO fill in here.
+Desugaring strict variable bindings looks as follows (core below ==>)
 
-https://ghc.haskell.org/trac/ghc/wiki/StrictPragma
+  let !x = rhs
+  in  body
+==>
+  let x = rhs
+  in x `seq` body -- seq the variable
+
+and if it is a pattern binding the desugaring looks like
+
+  let !pat = rhs
+  in body
+==>
+  let x = rhs -- bind the rhs to a new variable
+      pat = x
+  in x `seq` body -- seq the new variable
+
+if there is no variable in the pattern desugaring looks like
+
+  let False = rhs
+  in body
+==>
+  let x = rhs
+  in x `seq` body
+
+In order to force the Ids in the binding group they are passed around
+in the dsHsBind family of functions, and later seq'ed in DsExpr.ds_val_bind.
+
+See https://ghc.haskell.org/trac/ghc/wiki/StrictPragma for a more
+detailed explanation of the desugaring of strict bindings.
 
 -}
 
