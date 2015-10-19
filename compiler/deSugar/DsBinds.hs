@@ -69,16 +69,14 @@ import DynFlags
 import FastString
 import Util
 import MonadUtils
-import Control.Monad(liftM,when)
+import Control.Monad(liftM,when,foldM)
 import Fingerprint(Fingerprint(..), fingerprintString)
 
-{-
-************************************************************************
+{-**********************************************************************
 *                                                                      *
-\subsection[dsMonoBinds]{Desugaring a @MonoBinds@}
+           Desugaring a MonoBinds
 *                                                                      *
-************************************************************************
--}
+**********************************************************************-}
 
 -- | Desugar top level binds, strict binds are treated like normal
 -- binds since there is no good time to force before first usage.
@@ -169,11 +167,9 @@ dsHsBind dflags
                    , abs_ev_binds = ev_binds, abs_binds = binds })
   | ABE { abe_wrap = wrap, abe_poly = global
         , abe_mono = local, abe_prags = prags } <- export
-  , not (xopt Opt_Strict dflags)                  -- Don't handle
-  , not (anyBag (isBangedPatBind . unLoc) binds)  -- strict binds here
-  = do  { (local_force_vars, bind_prs) <- ds_lhs_binds binds
-        ; let (_missing,global_force_vars)
-                = matchup_exports [export] local_force_vars
+  , not (xopt Opt_Strict dflags)                 -- handle strict binds
+  , not (anyBag (isBangedPatBind . unLoc) binds) -- in the next case
+  = do  { (_, bind_prs) <- ds_lhs_binds binds
         ; let core_bind = Rec bind_prs
         ; ds_binds <- dsTcEvBinds_s ev_binds
         ; rhs <- dsHsWrapper wrap $  -- Usually the identity
@@ -188,8 +184,7 @@ dsHsBind dflags
                 main_bind = makeCorePair dflags global' (isDefaultMethod prags)
                                          (dictArity dicts) rhs
 
-        ; return (global_force_vars
-                 ,main_bind : fromOL spec_binds) }
+        ; return ([], main_bind : fromOL spec_binds) }
 
 dsHsBind dflags
          (AbsBinds { abs_tvs = tyvars, abs_ev_vars = dicts
@@ -200,11 +195,9 @@ dsHsBind dflags
         ; let core_bind = Rec [ makeCorePair dflags (add_inline lcl_id) False 0 rhs
                               | (lcl_id, rhs) <- bind_prs ]
                 -- Monomorphic recursion possible, hence Rec
-
+              new_force_vars = get_new_force_vars local_force_vars
               locals       = map abe_mono exports
-              (not_exported_force_vars,exported_force_vars)
-                           = matchup_exports exports local_force_vars
-              all_locals   = locals ++ not_exported_force_vars
+              all_locals   = locals ++ new_force_vars
               tup_expr     = mkBigCoreVarTup all_locals
               tup_ty       = exprType tup_expr
         ; ds_binds <- dsTcEvBinds_s ev_binds
@@ -215,9 +208,10 @@ dsHsBind dflags
 
         ; poly_tup_id <- newSysLocalDs (exprType poly_tup_rhs)
 
-        -- Sometimes we need to make new export to desugar strict
-        -- binds, see Note [Desugar Strict binds]
-        ; extra_exports <- mapM mk_export not_exported_force_vars
+        -- Find corresponding global or make up a new one: sometimes
+        -- we need to make new export to desugar strict binds, see
+        -- Note [Desugar Strict binds]
+        ; (exported_force_vars, extra_exports) <- get_exports local_force_vars
 
         ; let mk_bind (ABE { abe_wrap = wrap, abe_poly = global
                            , abe_mono = local, abe_prags = spec_prags })
@@ -237,7 +231,7 @@ dsHsBind dflags
 
         ; export_binds_s <- mapM mk_bind (exports ++ extra_exports)
 
-        ; return (exported_force_vars ++ map abe_poly extra_exports
+        ; return (exported_force_vars
                  ,(poly_tup_id, poly_tup_rhs) :
                    concat export_binds_s) }
   where
@@ -251,6 +245,27 @@ dsHsBind dflags
 
     add_inline :: Id -> Id    -- tran
     add_inline lcl_id = lookupVarEnv inline_env lcl_id `orElse` lcl_id
+
+    global_env :: IdEnv Id -- Maps local Id to its global exported Id
+    global_env = mkVarEnv [ (local, global)
+                          | ABE { abe_mono = local, abe_poly = global } <- exports
+                          ]
+
+    get_new_force_vars lcls =
+      foldr (\lcl acc -> case lookupVarEnv global_env lcl of
+                           Just _ -> acc
+                           Nothing -> lcl:acc)
+            [] lcls
+
+    get_exports :: [Id] -> DsM ([Id], [ABExport Id])
+    get_exports lcls =
+      foldM (\(glbls, exports) lcl ->
+              case lookupVarEnv global_env lcl of
+                Just glbl -> return (glbl:glbls, exports)
+                Nothing   -> do export <- mk_export lcl
+                                let glbl = abe_poly export
+                                return (glbl:glbls, export:exports))
+            ([],[]) lcls
 
     mk_export local =
       do global <- newSysLocalDs
@@ -276,28 +291,6 @@ getUnBangedLPat dflags (L _ (LazyPat p))
   = (False,p)
 getUnBangedLPat dflags p
   = (xopt Opt_Strict dflags,p)
-
-
--- | Match force variables with existing exported variables (used when
--- desugaring strict bindings)
-matchup_exports :: [ABExport Id] -- ^ All exports
-                -> [Id]          -- ^ Local Ids to export
-                -> ([Id], [Id])  -- ^ local Ids missing exports,
-                                 -- global exported Ids
-matchup_exports exs ids = go ids ([],[])
-  where go [] ids = ids
-        go (id:ids) (missing,found) =
-          case matchup_export exs id of
-            Nothing -> go ids (id : missing,found)
-            Just id -> go ids (missing,id : found)
-
-        matchup_export :: [ABExport Id] -> Id -> Maybe Id
-        matchup_export [] _ = Nothing
-        matchup_export (ex:exs) id
-          | ABE {abe_mono = local,abe_poly = global} <- ex
-          = if id == local
-            then Just global
-            else matchup_export exs id
 
 
 ------------------------
