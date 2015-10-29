@@ -12426,10 +12426,11 @@ Strict Haskell
 
 High-performance Haskell code (e.g. numeric code) can sometimes be
 littered with bang patterns, making it harder to read. The reason is
-that lazy evaluation isn't the right default in this particular code but
-the programmer has no way to say that except by repeatedly adding bang
-patterns. Below ``-XStrictData`` is detailed that allows the programmer
-to switch the default behavior on a per-module basis.
+that lazy evaluation isn't the right default in this particular code
+but the programmer has no way to say that except by repeatedly adding
+bang patterns. Below ``-XStrictData`` and ``-XStrict`` are detailed
+that allows the programmer to switch the default behavior on a
+per-module basis.
 
 .. _strict-data:
 
@@ -12447,7 +12448,7 @@ When the user writes
           data T = C a
           data T' = C' ~a
 
-we interpret it as if she had written
+we interpret it as if they had written
 
 ::
 
@@ -12480,35 +12481,37 @@ optionally had by adding ``!`` in front of a variable.
 
        f !x = ...
 
-   Adding ``~`` in front of ``x`` gives the old lazy behavior.
+   Adding ``~`` in front of ``x`` gives the regular lazy behavior.
 
 -  **Let/where bindings.**
 
    When the user writes ::
 
-       let x = ...
-       let pat = ...
+     let x = ...
+     let pat = ...
 
    we interpret it as if they had written ::
 
-       let !x = ...
-       let !pat = ...
+     let !x = ...
+     let !pat = ...
 
-   Adding ``~`` in front of x gives the old lazy behavior. Notice that
-   we do not put bangs on nested patterns. For example ::
+   Adding ``~`` in front of ``x`` gives the regular lazy
+   behavior. Notice that we do not put bangs on nested patterns. For
+   example ::
 
-       let (p,q) = if flob then (undefined, undefined) else (True, False)
-       in ...
+     let (p,q) = if flob then (undefined, undefined) else (True, False)
+     in ...
 
    will behave like ::
 
-       let !(p,q) = if flob then (undefined, undefined) else (True, False)
+     let !(p,q) = if flob then (undefined, undefined) else (True,False)
+     in ...
 
-   which will strictly evaluate the RHS, and bind ``p`` and ``q`` to the
-   components of the pair. But the pair itself is lazy (unless we also
-   compile the ``Prelude`` with ``Strict``; see "Modularity" below). So
-   ``p`` and ``q`` may end up bound to undefined. See also "Recursive
-   and polymorphic let bindings" below.
+   which will strictly evaluate the right hand side, and bind ``p``
+   and ``q`` to the components of the pair. But the pair itself is
+   lazy (unless we also compile the ``Prelude`` with ``Strict``; see
+   :ref:`strict-modularity` below). So ``p`` and ``q`` may end up bound to
+   undefined. See also :ref:`recursive-and-polymorphic-let-bindings` below.
 
 -  **Case expressions.**
 
@@ -12562,14 +12565,18 @@ optionally had by adding ``!`` in front of a variable.
    ``x``. With ``Strict``, both become strict because ``f``'s argument
    gets an implict bang.
 
+
+.. _strict-modularity:
+
 Modularity
 ----------
 
-These extensions only affects definitions in this module. Functions and
-data types imported from other modules are unaffected. For example, we
-won't evaluate the argument to ``Just`` before applying the constructor.
-Similarly we won't evaluate the first argument to
-``Data.Map.findWithDefault`` before applying the function.
+``Strict`` and ``StrictData`` only affects definitions in the module
+they are used in. Functions and data types imported from other modules
+are unaffected. For example, we won't evaluate the argument to
+``Just`` before applying the constructor.  Similarly we won't evaluate
+the first argument to ``Data.Map.findWithDefault`` before applying the
+function.
 
 This is crucial to preserve correctness. Entities defined in other
 modules might rely on laziness for correctness (whether functional or
@@ -12583,15 +12590,13 @@ continue to have their existing, lazy, semantics.
 Recursive and polymorphic let bindings
 --------------------------------------
 
-Static semantics
-^^^^^^^^^^^^^^^^
+**Static semantics**
 
 Exactly as in Haskell, unaffected by ``Strict``. This is more permissive
 than past rules for bang patterns in let bindings, because it supports
 bang-patterns for polymorphic and recursive bindings.
 
-Dynamic semantics
-^^^^^^^^^^^^^^^^^
+**Dynamic semantics**
 
 Consider the rules in the box of `Section 3.12 of the Haskell
 report <http://www.haskell.org/onlinereport/exps.html#sect3.12>`__.
@@ -12613,11 +12618,11 @@ variable:
     Again if ``e`` is a variable, you can optimised his by not introducing a
     fresh variable.
 
-The result will be a (possibly) recursive set of bindings, binding only
-simple variables on the LHS. (One could go one step further, as in the
-Haskell Report and make the recursive bindings non-recursive using
-``fix``, but we do not do so in Core, and it only obfuscates matters, so
-we do not do so here.)
+The result will be a (possibly) recursive set of bindings, binding
+only simple variables on the left hand side. (One could go one step
+further, as in the Haskell Report and make the recursive bindings
+non-recursive using ``fix``, but we do not do so in Core, and it only
+obfuscates matters, so we do not do so here.)
 
 Here are some examples of how this translation works. The first
 expression of each sequence is Haskell source; the subsequent ones are
