@@ -247,9 +247,10 @@ dsHsBind dflags
     add_inline lcl_id = lookupVarEnv inline_env lcl_id `orElse` lcl_id
 
     global_env :: IdEnv Id -- Maps local Id to its global exported Id
-    global_env = mkVarEnv [ (local, global)
-                          | ABE { abe_mono = local, abe_poly = global } <- exports
-                          ]
+    global_env =
+      mkVarEnv [ (local, global)
+               | ABE { abe_mono = local, abe_poly = global } <- exports
+               ]
 
     -- find variables that are not exported
     get_new_force_vars lcls =
@@ -487,7 +488,7 @@ if there is no variable in the pattern desugaring looks like
   let False = rhs
   in body
 ==>
-  let x = rhs
+  let x = case rhs of {False -> (); _ -> error "Match failed"}
   in x `seq` body
 
 In order to force the Ids in the binding group they are passed around
