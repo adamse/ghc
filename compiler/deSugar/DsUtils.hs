@@ -627,13 +627,6 @@ mkSelectorBinds ticks (L _ (VarPat v)) val_expr
                     _   -> val_expr)])
 
 mkSelectorBinds ticks pat val_expr
-  | null binders
-    -- In case of strictness we still need to bind val_expr to force
-    -- it. See Note [Desugar Strict binds] in DsBinds.
-  = do { val_var <- newSysLocalDs (hsLPatType pat)
-       ; return (val_var, [(val_var, val_expr)])
-       }
-
   | isSingleton binders || is_simple_lpat pat
     -- See Note [mkSelectorBinds]
   = do { val_var <- newSysLocalDs (hsLPatType pat)
@@ -671,7 +664,8 @@ mkSelectorBinds ticks pat val_expr
               = (binder, mkOptTickBox tick $
                             mkTupleSelector local_binders binder
                                             tuple_var (Var tuple_var))
-       ; return (val_var
+       ; let force_var = if null binders then tuple_var else val_var
+       ; return (force_var
                 ,(val_var,val_expr) :
                  (tuple_var, tuple_expr) :
                  zipWith mk_tup_bind ticks' binders) }
