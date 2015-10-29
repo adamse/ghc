@@ -251,12 +251,14 @@ dsHsBind dflags
                           | ABE { abe_mono = local, abe_poly = global } <- exports
                           ]
 
+    -- find variables that are not exported
     get_new_force_vars lcls =
       foldr (\lcl acc -> case lookupVarEnv global_env lcl of
                            Just _ -> acc
                            Nothing -> lcl:acc)
             [] lcls
 
+    -- find exports or make up new exports for force variables
     get_exports :: [Id] -> DsM ([Id], [ABExport Id])
     get_exports lcls =
       foldM (\(glbls, exports) lcl ->
