@@ -805,12 +805,13 @@ matchWrapper ctxt (MG { mg_alts = matches
   where
     mk_eqn_info (L _ (Match _ pats _ grhss))
       = do { dflags <- getDynFlags
-           ; let strictify pat =
-               let (is_strict, pat') = getUnBangedLPat dflags pat
-               in if is_strict then BangPat pat' else unLoc pat'
-           ; let upats = map strictify pats
+           ; let upats = map (strictify dflags) pats
            ; match_result <- dsGRHSs ctxt upats grhss rhs_ty
            ; return (EqnInfo { eqn_pats = upats, eqn_rhs  = match_result}) }
+
+    strictify dflags pat =
+      let (is_strict, pat') = getUnBangedLPat dflags pat
+      in if is_strict then BangPat pat' else unLoc pat'
 
     handleWarnings = if isGenerated origin
                      then discardWarningsDs
