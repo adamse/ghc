@@ -12706,15 +12706,19 @@ and a polymorphic one: ::
 
     ===> (FORCE)
         let f = /\a. fst (reverse a, True) in f `seq` body
-            -- Notice that the `seq` is added only in the translation to Core
-            -- If we did it in Haskell source, thus
-            --    let f = ... in f `seq` body
-            -- then f's polymorphic type would get intantiated, so the Core
-            -- translation woudl be
-            --    let f = ... in f Any `seq` body
-
     ===> (inline seq, inline f)
         case (/\a. fst (reverse a, True)) of f -> body
+
+Notice that the ``seq`` is added only in the translation to Core
+If we did it in Haskell source, thus ::
+
+   let f = ... in f `seq` body
+
+then ``f``\ 's polymorphic type would get intantiated, so the Core
+translation would be ::
+
+   let f = ... in f Any `seq` body
+
 
 When overloading is involved, the results might be slightly counter
 intuitive: ::
