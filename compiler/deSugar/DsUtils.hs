@@ -868,8 +868,9 @@ mkBinaryTickBox ixT ixF e = do
 getUnBangedLPat :: DynFlags
                 -> LPat id  -- ^ Original pattern
                 -> (Bool, LPat id) -- is bind strict?, pattern without bangs
-getUnBangedLPat dflags (L _ (ParPat p))
-  = getUnBangedLPat dflags p
+getUnBangedLPat dflags (L l (ParPat p))
+  = let (is_strict, p') = getUnBangedLPat dflags p
+    in (is_strict, L l (ParPat p'))
 getUnBangedLPat _ (L _ (BangPat p))
   = (True,p)
 getUnBangedLPat dflags (L _ (LazyPat p))
