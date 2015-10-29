@@ -278,7 +278,14 @@ dsHsBind dflags
 dsHsBind _ (PatSynBind{}) = panic "dsHsBind: PatSynBind"
 
 -- | Remove any bang from a pattern and say if it is a strict bind,
--- also make irrefutable patterns ordinary patterns if -XStrict
+-- also make irrefutable patterns ordinary patterns if -XStrict.
+--
+-- Example:
+-- ~pat    => False, pat -- when -XStrict
+-- ~pat    => False, ~pat -- without -XStrict
+-- ~(~pat) => False, ~pat -- when -XStrict
+-- pat     => True, pat -- when -XStrict
+-- !pat    => True, pat -- always
 getUnBangedLPat :: DynFlags
                 -> LPat id  -- ^ Original pattern
                 -> (Bool, LPat id) -- is bind strict?, pattern without bangs
