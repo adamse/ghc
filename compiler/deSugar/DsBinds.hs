@@ -277,28 +277,6 @@ dsHsBind dflags
 
 dsHsBind _ (PatSynBind{}) = panic "dsHsBind: PatSynBind"
 
--- | Remove any bang from a pattern and say if it is a strict bind,
--- also make irrefutable patterns ordinary patterns if -XStrict.
---
--- Example:
--- ~pat    => False, pat -- when -XStrict
--- ~pat    => False, ~pat -- without -XStrict
--- ~(~pat) => False, ~pat -- when -XStrict
--- pat     => True, pat -- when -XStrict
--- !pat    => True, pat -- always
-getUnBangedLPat :: DynFlags
-                -> LPat id  -- ^ Original pattern
-                -> (Bool, LPat id) -- is bind strict?, pattern without bangs
-getUnBangedLPat dflags (L _ (ParPat p))
-  = getUnBangedLPat dflags p
-getUnBangedLPat _ (L _ (BangPat p))
-  = (True,p)
-getUnBangedLPat dflags (L _ (LazyPat p))
-  | xopt Opt_Strict dflags
-  = (False,p)
-getUnBangedLPat dflags p
-  = (xopt Opt_Strict dflags,p)
-
 
 ------------------------
 makeCorePair :: DynFlags -> Id -> Bool -> Arity -> CoreExpr -> (Id, CoreExpr)

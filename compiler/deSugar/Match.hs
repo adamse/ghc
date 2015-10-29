@@ -805,21 +805,15 @@ matchWrapper ctxt (MG { mg_alts = matches
   where
     mk_eqn_info (L _ (Match _ pats _ grhss))
       = do { dflags <- getDynFlags
-           ; let upats = if xopt Opt_Strict dflags
-                            then map strictify pats
-                            else map unLoc pats
+           ; let strictify pat = let (is_strict, pat') = getUnBangedLPat dflags pat
+                                 in if is_strict then BangPat pat' else unLoc pat'
+           ; let upats = map strictify pats
            ; match_result <- dsGRHSs ctxt upats grhss rhs_ty
            ; return (EqnInfo { eqn_pats = upats, eqn_rhs  = match_result}) }
 
     handleWarnings = if isGenerated origin
                      then discardWarningsDs
                      else id
-
-    -- If the user has specified Strict we want to change the patterns
-    strictify pat = case unLoc pat of
-                      LazyPat pat' -> unLoc pat' -- ~ -> normal patterns
-                      pat'@(BangPat _) -> pat'   -- ! -> strict pattern
-                      _ -> BangPat pat           -- others -> strict
 
 
 matchEquations  :: HsMatchContext Name
