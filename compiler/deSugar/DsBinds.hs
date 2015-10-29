@@ -493,6 +493,44 @@ if there is no variable in the pattern desugaring looks like
 In order to force the Ids in the binding group they are passed around
 in the dsHsBind family of functions, and later seq'ed in DsExpr.ds_val_bind.
 
+Consider a recursive group like this
+
+  letrec
+     f : g = rhs[f,g]
+  in <body>
+
+Without `Strict`, we get a translation like this:
+
+  let t = /\a. letrec tm = rhs[fm,gm]
+                      fm = case t of fm:_ -> fm
+                      gm = case t of _:gm -> gm
+                in
+                (fm,gm)
+
+  in let f = /\a. case t a of (fm,_) -> fm
+  in let g = /\a. case t a of (_,gm) -> gm
+  in <body>
+
+Here `tm` is the monomorphic binding for `rhs`.
+
+With `Strict`, we want to force `tm`, but NOT `fm` or `gm`.
+Alas, `tm` isn't in scope in the `in <body>` part.
+
+The simplest thing is to return it in the polymoprhic
+tuple `t`, thus:
+
+  let t = /\a. letrec tm = rhs[fm,gm]
+                      fm = case t of fm:_ -> fm
+                      gm = case t of _:gm -> gm
+                in
+                (tm, fm, gm)
+
+  in let f = /\a. case t a of (_,fm,_) -> fm
+  in let g = /\a. case t a of (_,_,gm) -> gm
+  in let tm = /\a. case t a of (tm,_,_) -> tm
+  in tm `seq` <body>
+
+
 See https://ghc.haskell.org/trac/ghc/wiki/StrictPragma for a more
 detailed explanation of the desugaring of strict bindings.
 
